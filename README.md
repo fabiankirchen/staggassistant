@@ -1,4 +1,4 @@
-<img src="icons/icon.png" align="left" width="140" alt="StaggAssistant Logo" style="margin-right: 20px;">
+<img src="icon.png" align="left" width="140" alt="StaggAssistant Logo" style="margin-right: 20px;">
 
 
 
