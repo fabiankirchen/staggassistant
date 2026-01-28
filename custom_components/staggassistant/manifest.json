@@ -1,0 +1,10 @@
+{
+  "domain": "staggassistant",
+  "name": "StaggAssistant",
+  "codeowners": ["@fabiankirchen"],
+  "config_flow": true,
+  "documentation": "https://github.com/DEIN_NUTZERNAME/staggassistant",
+  "iot_class": "local_polling",
+  "version": "0.1.0",
+  "requirements": []
+}
