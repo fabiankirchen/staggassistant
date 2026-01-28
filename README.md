@@ -1,4 +1,6 @@
-# StaggAssistant ☕️
+<img src="icons/icon.png" align="left" width="140" alt="StaggAssistant Logo" style="margin-right: 20px;">
+
+# StaggAssistant 🦢☕️
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/fabiankirchen/staggassistant)](https://github.com/fabiankirchen/staggassistant/releases)
@@ -7,7 +9,7 @@
 A Home Assistant integration for the **Fellow Stagg EKG Pro** kettle.
 This integration bypasses the need for an official API by communicating directly with the kettle's internal **CLI wrapper** over HTTP.
 
-<img src="icons/icon.png" alt="StaggAssistant Icon" width="150" align="right">
+<br clear="left"/>
 
 ## ✨ Features
 
@@ -46,7 +48,7 @@ This integration is purely vibe coded. I’ve got a very limited coding knowledg
 
 ## ❤️ Credits
 
-Big thanks to **[@tomtastic](https://github.com/tomtastic)** where I discovered how I can communicate with the kettle.
+Big thanks to **[@tomtastic](https://github.com/tomtastic)** and his project **[stagg-ekg-pro](https://github.com/tomtastic/stagg-ekg-pro)** where I discovered how I can communicate with the kettle.
 
 ## 📄 License
 
