@@ -7,7 +7,7 @@
 A Home Assistant integration for the **Fellow Stagg EKG Pro** kettle.
 This integration bypasses the need for an official API by communicating directly with the kettle's internal **CLI wrapper** over HTTP.
 
-<img src="images/icon.png" alt="StaggAssistant Icon" width="150" align="right">
+<img src="icons/icon.png" alt="StaggAssistant Icon" width="150" align="right">
 
 ## ✨ Features
 
