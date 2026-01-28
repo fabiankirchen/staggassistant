@@ -50,7 +50,7 @@ This integration is purely vibe coded. I’ve got a very limited coding knowledg
 
 ## ❤️ Credits
 
-Big thanks to **[@tomtastic](https://github.com/tomtastic)** and his project **[stagg-ekg-pro](https://github.com/tomtastic/stagg-ekg-pro)** where I discovered how I can communicate with the kettle.
+Big thanks to the repos **[stagg-ekg-pro](https://github.com/tomtastic/stagg-ekg-pro)** & **[homebridge-kettle](https://github.com/Willmac16/homebridge-kettle/tree/ekg-pro-cli)** through which I discovered how I can communicate with the kettle.
 
 ## 📄 License
 
