@@ -30,12 +30,17 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                 response.raise_for_status()
                 text = await response.text()
                 
-                temp_match = re.search(r'tempr=([0-9.]+)', text)
-                target_match = re.search(r'temprT=([0-9.]+)', text)
+                temp_match = re.search(r'tempr=([0-9.]+|nan)', text)
+                target_match = re.search(r'temprT=([0-9.]+|nan)', text)
                 mode_match = re.search(r'mode=([a-zA-Z0-9_]+)', text)
-
+                
                 if not temp_match or not target_match or not mode_match:
                     raise UpdateFailed(f"Parsing Fehler. Antwort: {text}")
+
+                def parse_float(value):
+                    if value == 'nan': return None
+                    try: return float(value)
+                    except: return None
 
                 return {
                     "temp": float(temp_match.group(1)),
