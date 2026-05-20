@@ -14,6 +14,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     numbers = [
         StaggNumber(coordinator, entry, "hold_time_minutes", "Hold Time Duration", 0, 60, 1, "min", "mdi:timer-sand", "setsetting hold"),
         StaggNumber(coordinator, entry, "altitude_meters", "Altitude Setting", 0, 3000, 1, "m", "mdi:elevation-rise", "setaltitudem"),
+        StaggNumber(coordinator, entry, "chime_volume", "Chime Volume", 0, 10, 1, None, "mdi:volume-high", "setsetting chime"),
     ]
     
     async_add_entities(numbers, True)

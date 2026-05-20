@@ -13,7 +13,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     switches = [
         StaggSwitch(coordinator, entry, "pre_boil_enabled", "Pre-Boil", "mdi:water-boiler"),
-        StaggSwitch(coordinator, entry, "chime_enabled", "Chime", "mdi:bell"),
     ]
     
     async_add_entities(switches, True)
