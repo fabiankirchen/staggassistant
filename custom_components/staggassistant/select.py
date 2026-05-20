@@ -27,8 +27,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
             ["en", "fr", "es"], "mdi:translate",
             lambda val: f"setsetting language {['en', 'fr', 'es'].index(val)}"
         ),
+        StaggSelect(
+            coordinator, entry, "units", "Temperature Units",
+            ["C", "F"], "mdi:thermometer",
+            lambda val: "setunitsc" if val == "C" else "setunitsf"
+        ),
     ]
-    
+
     async_add_entities(selects, True)
 
 class StaggSelect(CoordinatorEntity, SelectEntity):

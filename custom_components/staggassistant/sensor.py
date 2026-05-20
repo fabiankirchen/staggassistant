@@ -25,6 +25,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StaggSensor(coordinator, entry, "language", "Language", None, None, "mdi:translate"),
         StaggSensor(coordinator, entry, "chime_volume", "Chime Volume", None, None, "mdi:volume-high"),
         StaggSensor(coordinator, entry, "clock_mode", "Clock Mode", None, None, "mdi:clock-outline"),
+        StaggSensor(coordinator, entry, "temperature_units", "Temperature Units", None, None, "mdi:thermometer"),
     ]
     
     async_add_entities(sensors, True)
@@ -85,7 +86,9 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
                 return "analog" if int(cm) == 2 else "digital"
             except (TypeError, ValueError):
                 return cm
-            
+        elif self._type == "temperature_units":
+            return self.coordinator.data.get("units", "C")
+
         return None
 
     @property
