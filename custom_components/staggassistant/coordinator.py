@@ -80,12 +80,16 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                 except Exception:
                     pass
 
-                # Schedule temperature: "schtempr=N F (X C ...)" → extract C value
+                # Schedule temperature: "schtempr=N F (X C ...)" or "schtempr=N C (X C ...)"
                 sch_tempr_c = None
-                sch_match = re.search(r'schtempr\s*=\s*[^\(]+\(\s*(-?[0-9.]+)\s*C', settings_text)
+                # Match the number followed by 'C' anywhere in the line after schtempr
+                sch_match = re.search(r'schtempr\s*=\s*.*?\s*(-?[0-9.]+)\s*C', settings_text)
                 if sch_match:
                     try:
-                        sch_tempr_c = float(sch_match.group(1))
+                        val = float(sch_match.group(1))
+                        # -17.777779 C is exactly 0 F, which is the kettle's "unset" default
+                        if val > -17.0: 
+                            sch_tempr_c = val
                     except ValueError:
                         pass
 
@@ -93,6 +97,7 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                 repeat_sched = get_setting_value("Repeat_sched", 0)
                 if schedon == 0:
                     schedule_mode = "off"
+                    sch_tempr_c = None # Hide temperature if schedule is off
                 elif repeat_sched:
                     schedule_mode = "repeat"
                 else:
