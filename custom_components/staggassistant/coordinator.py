@@ -82,14 +82,10 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
 
                 # Schedule temperature: "schtempr=N F (X C ...)" or "schtempr=N C (X C ...)"
                 sch_tempr_c = None
-                # Match the number followed by 'C' anywhere in the line after schtempr
                 sch_match = re.search(r'schtempr\s*=\s*.*?\s*(-?[0-9.]+)\s*C', settings_text)
                 if sch_match:
                     try:
-                        val = float(sch_match.group(1))
-                        # -17.777779 C is exactly 0 F, which is the kettle's "unset" default
-                        if val > -17.0: 
-                            sch_tempr_c = val
+                        sch_tempr_c = float(sch_match.group(1))
                     except ValueError:
                         pass
 
