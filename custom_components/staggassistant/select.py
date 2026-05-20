@@ -25,7 +25,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StaggSelect(
             coordinator, entry, "language", "Language Selection", 
             ["en", "fr", "es"], "mdi:translate",
-            lambda val: f"setsettings language {val}"
+            lambda val: f"setsetting language {['en', 'fr', 'es'].index(val)}"
         ),
     ]
     
@@ -67,6 +67,14 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
             if val == 3: return "High"
             return "Off"
             
+        if self._key == "language":
+            try:
+                idx = int(val)
+                if 0 <= idx < len(self._attr_options):
+                    return self._attr_options[idx]
+            except (ValueError, TypeError):
+                pass
+
         if val in self._attr_options:
             return val
             

@@ -50,7 +50,7 @@ class StaggSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
-        url = f"http://{self.coordinator.ip}/cli?cmd=setsettingb+{self._setting_name}+1"
+        url = f"http://{self.coordinator.ip}/cli?cmd=setsetting+{self._setting_name}+1"
         try:
             async with self.coordinator.session.get(url) as response:
                 response.raise_for_status()
@@ -60,7 +60,7 @@ class StaggSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs):
         """Turn the switch off."""
-        url = f"http://{self.coordinator.ip}/cli?cmd=setsettingb+{self._setting_name}+0"
+        url = f"http://{self.coordinator.ip}/cli?cmd=setsetting+{self._setting_name}+0"
         try:
             async with self.coordinator.session.get(url) as response:
                 response.raise_for_status()
