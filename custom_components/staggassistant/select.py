@@ -32,6 +32,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
             ["C", "F"], "mdi:thermometer",
             lambda val: "setunitsc" if val == "C" else "setunitsf"
         ),
+        StaggSelect(
+            coordinator, entry, "schedule_mode", "Schedule Mode",
+            ["off", "once", "repeat"], "mdi:calendar-clock",
+            lambda val: (
+                "setsetting schedon 0" if val == "off"
+                else "setsetting schedon 1" if val == "once"
+                else "setsetting schedon 1"
+            )
+        ),
     ]
 
     async_add_entities(selects, True)

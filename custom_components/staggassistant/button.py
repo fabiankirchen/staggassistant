@@ -1,5 +1,6 @@
 """Support for Fellow Stagg EKG Pro buttons."""
 import logging
+from datetime import datetime
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -10,14 +11,16 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up StaggLink buttons from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
+
     buttons = [
         StaggButton(coordinator, entry, "press_button_1", "Press Main Button", "mdi:gesture-tap-button", "1"),
         StaggButton(coordinator, entry, "press_button_2", "Press Back Button", "mdi:keyboard-backspace", "2"),
         StaggButton(coordinator, entry, "rotate_left", "Rotate Dial Left", "mdi:rotate-left", "q"),
         StaggButton(coordinator, entry, "rotate_right", "Rotate Dial Right", "mdi:rotate-right", "w"),
+        StaggButton(coordinator, entry, "sync_time", "Sync Time", "mdi:clock-check-outline", "_sync_time"),
+        StaggButton(coordinator, entry, "reload_data", "Reload Data", "mdi:refresh", "_reload"),
     ]
-    
+
     async_add_entities(buttons, True)
 
 class StaggButton(CoordinatorEntity, ButtonEntity):
@@ -42,7 +45,17 @@ class StaggButton(CoordinatorEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Trigger the command when the button is pressed."""
-        url = f"http://{self.coordinator.ip}/cli?cmd={self._command}"
+        if self._command == "_reload":
+            await self.coordinator.async_request_refresh()
+            return
+
+        if self._command == "_sync_time":
+            now = datetime.now()
+            cmd = f"setclock+{now.hour}+{now.minute}"
+        else:
+            cmd = self._command
+
+        url = f"http://{self.coordinator.ip}/cli?cmd={cmd}"
         try:
             async with self.coordinator.session.get(url) as response:
                 response.raise_for_status()

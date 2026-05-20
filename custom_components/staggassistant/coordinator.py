@@ -27,7 +27,7 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
         settings_url = f"http://{self.ip}/cli?cmd=prtsettings"
         
         try:
-            async with async_timeout.timeout(15):
+            async with async_timeout.timeout(20):
                 # 1. State abrufen
                 response = await self.session.get(state_url)
                 response.raise_for_status()
@@ -62,6 +62,42 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                             return val
                     return default
 
+                def get_time_value(name, default=None):
+                    """Parse HH:MM values (colons not matched by get_setting_value)."""
+                    match = re.search(rf'\b{name}\s*=\s*([0-9]+:[0-9]+)', settings_text, re.IGNORECASE)
+                    return match.group(1) if match else default
+
+                # 3. Clock time from prtclock
+                clock_time = None
+                try:
+                    response_clock = await self.session.get(f"http://{self.ip}/cli?cmd=prtclock")
+                    response_clock.raise_for_status()
+                    clock_text = await response_clock.text()
+                    clock_match = re.search(r'clock=([0-9]+:[0-9]+)', clock_text)
+                    if clock_match:
+                        h, m = clock_match.group(1).split(":")
+                        clock_time = f"{int(h):02d}:{int(m):02d}"
+                except Exception:
+                    pass
+
+                # Schedule temperature: "schtempr=N F (X C ...)" → extract C value
+                sch_tempr_c = None
+                sch_match = re.search(r'schtempr\s*=\s*[^\(]+\(\s*(-?[0-9.]+)\s*C', settings_text)
+                if sch_match:
+                    try:
+                        sch_tempr_c = float(sch_match.group(1))
+                    except ValueError:
+                        pass
+
+                schedon = get_setting_value("schedon", 0)
+                repeat_sched = get_setting_value("Repeat_sched", 0)
+                if schedon == 0:
+                    schedule_mode = "off"
+                elif repeat_sched:
+                    schedule_mode = "repeat"
+                else:
+                    schedule_mode = "once"
+
                 return {
                     "temp": parse_float(temp_match.group(1)),
                     "target": parse_float(target_match.group(1)),
@@ -75,7 +111,11 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                     "language": get_setting_value("language", 0),
                     "units": "C" if get_setting_value("units", 1) == 1 else "F",
                     "clock_mode": get_setting_value("clockmode", 0),
-                    "schedule_enabled": get_setting_value("schedon", 0),
+                    "clock_time": clock_time,
+                    "schedule_enabled": schedon,
+                    "schedule_mode": schedule_mode,
+                    "schedule_time": get_time_value("schtime"),
+                    "schedule_temperature": sch_tempr_c,
                 }
 
         except Exception as err:

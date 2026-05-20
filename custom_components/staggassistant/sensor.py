@@ -26,6 +26,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StaggSensor(coordinator, entry, "chime_volume", "Chime Volume", None, None, "mdi:volume-high"),
         StaggSensor(coordinator, entry, "clock_mode", "Clock Mode", None, None, "mdi:clock-outline"),
         StaggSensor(coordinator, entry, "temperature_units", "Temperature Units", None, None, "mdi:thermometer"),
+        StaggSensor(coordinator, entry, "clock_time", "Clock Time", None, None, "mdi:clock-time-eight-outline"),
+        StaggSensor(coordinator, entry, "schedule_mode", "Schedule Mode", None, None, "mdi:calendar-clock"),
+        StaggSensor(coordinator, entry, "schedule_time", "Schedule Time", None, None, "mdi:calendar-clock-outline"),
+        StaggSensor(coordinator, entry, "schedule_temperature", "Schedule Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer-auto"),
     ]
     
     async_add_entities(sensors, True)
@@ -88,6 +92,14 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
                 return cm
         elif self._type == "temperature_units":
             return self.coordinator.data.get("units", "C")
+        elif self._type == "clock_time":
+            return self.coordinator.data.get("clock_time")
+        elif self._type == "schedule_mode":
+            return self.coordinator.data.get("schedule_mode")
+        elif self._type == "schedule_time":
+            return self.coordinator.data.get("schedule_time")
+        elif self._type == "schedule_temperature":
+            return self.coordinator.data.get("schedule_temperature")
 
         return None
 
