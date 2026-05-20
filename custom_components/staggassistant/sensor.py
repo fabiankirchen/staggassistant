@@ -66,7 +66,10 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
         elif self._type == "target_temp":
             return self.coordinator.data.get("target")
         elif self._type == "state_mode":
-            return self.coordinator.data.get("mode")
+            mode = self.coordinator.data.get("mode")
+            if mode and mode.startswith("S_"):
+                return mode[2:].replace("_", " ").title()
+            return mode
         elif self._type == "hold_time":
             return self.coordinator.data.get("hold_time_minutes")
         elif self._type == "altitude":
