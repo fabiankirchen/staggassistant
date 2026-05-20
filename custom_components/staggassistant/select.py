@@ -13,9 +13,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     selects = [
         StaggSelect(
-            coordinator, entry, "clock_mode", "Clock Style", 
-            ["digital", "analog"], "mdi:clock-outline",
-            lambda val: "setdigital" if val == "digital" else "setanalog"
+            coordinator, entry, "clock_mode", "Clock Style",
+            ["off", "digital", "analog"], "mdi:clock-outline",
+            lambda val: "setsetting+clockmode+0" if val == "off" else ("setdigital" if val == "digital" else "setanalog")
         ),
         StaggSelect(
             coordinator, entry, "chime_volume", "Volume Level", 
@@ -82,12 +82,14 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
             return "Off"
 
         if self._key == "clock_mode":
-            # clockmode: 0 or 1 = digital, 2 = analog
+            # clockmode: 0=off, 1=digital, 2=analog
             try:
                 idx = int(val)
-                return "analog" if idx == 2 else "digital"
+                if idx == 0: return "off"
+                if idx == 1: return "digital"
+                return "analog"
             except (ValueError, TypeError):
-                return "digital"
+                return "off"
 
         if self._key == "language":
             try:

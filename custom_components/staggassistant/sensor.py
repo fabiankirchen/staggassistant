@@ -87,7 +87,10 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
         elif self._type == "clock_mode":
             cm = self.coordinator.data.get("clock_mode")
             try:
-                return "analog" if int(cm) == 2 else "digital"
+                idx = int(cm)
+                if idx == 0: return "off"
+                if idx == 1: return "digital"
+                return "analog"
             except (TypeError, ValueError):
                 return cm
         elif self._type == "temperature_units":
