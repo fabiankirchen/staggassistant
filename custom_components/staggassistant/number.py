@@ -12,7 +12,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     numbers = [
-        StaggNumber(coordinator, entry, "hold_time_minutes", "Hold Time Duration", 15, 60, 1, "min", "mdi:timer-sand", "setsetting hold_time_minutes"),
+        StaggNumber(coordinator, entry, "hold_time_minutes", "Hold Time Duration", 15, 60, 1, "min", "mdi:timer-sand", "setsetting hold"),
         StaggNumber(coordinator, entry, "altitude_meters", "Altitude Setting", 0, 3000, 1, "m", "mdi:elevation-rise", "setaltitudem"),
     ]
     
@@ -47,7 +47,10 @@ class StaggNumber(CoordinatorEntity, NumberEntity):
         """Return the value of the number."""
         if not self.coordinator.data:
             return None
-        return self.coordinator.data.get(self._key)
+        val = self.coordinator.data.get(self._key)
+        if self._key == "hold_time_minutes" and (val is None or val <= 0):
+            return 30
+        return val
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""

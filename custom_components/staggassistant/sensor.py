@@ -71,9 +71,9 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
         elif self._type == "chime_volume":
             vol = self.coordinator.data.get("chime_volume")
             if vol == 0: return "Off"
-            if vol == 1: return "Low"
-            if vol == 2: return "Medium"
-            if vol == 3: return "High"
+            if vol in (1, 2): return "Low"
+            if vol in (3, 4): return "Medium"
+            if vol == 5: return "High"
             return vol
         elif self._type == "clock_mode":
             return self.coordinator.data.get("clock_mode")

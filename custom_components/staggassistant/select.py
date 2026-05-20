@@ -20,7 +20,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StaggSelect(
             coordinator, entry, "chime_volume", "Volume Level", 
             ["Off", "Low", "Medium", "High"], "mdi:volume-high",
-            lambda val: f"setsetting chime_volume {['Off', 'Low', 'Medium', 'High'].index(val)}"
+            lambda val: f"setsetting chime { { 'Off': 0, 'Low': 2, 'Medium': 4, 'High': 5 }[val] }"
         ),
         StaggSelect(
             coordinator, entry, "language", "Language Selection", 
@@ -60,11 +60,11 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
         val = self.coordinator.data.get(self._key)
         
         if self._key == "chime_volume":
-            # Map 0, 1, 2, 3 to Off, Low, Medium, High
+            # Map 0-5 to Off, Low, Medium, High
             if val == 0: return "Off"
-            if val == 1: return "Low"
-            if val == 2: return "Medium"
-            if val == 3: return "High"
+            if val in (1, 2): return "Low"
+            if val in (3, 4): return "Medium"
+            if val == 5: return "High"
             return "Off"
             
         if self._key == "language":

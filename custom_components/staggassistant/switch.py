@@ -50,7 +50,21 @@ class StaggSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
-        url = f"http://{self.coordinator.ip}/cli?cmd=setsetting+{self._setting_name}+1"
+        if self._setting_name == "hold_enabled":
+            hold_time = self.coordinator.data.get("hold_time_minutes") or 30
+            if hold_time <= 0:
+                hold_time = 30
+            cmd = f"setsetting hold {hold_time}"
+        elif self._setting_name == "pre_boil_enabled":
+            cmd = "setsetting boil 1"
+        elif self._setting_name == "chime_enabled":
+            cmd = "setsetting chime 5"
+        elif self._setting_name == "schedule_enabled":
+            cmd = "setsetting schedon 1"
+        else:
+            cmd = f"setsetting {self._setting_name} 1"
+
+        url = f"http://{self.coordinator.ip}/cli?cmd={cmd.replace(' ', '+')}"
         try:
             async with self.coordinator.session.get(url) as response:
                 response.raise_for_status()
@@ -60,7 +74,18 @@ class StaggSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs):
         """Turn the switch off."""
-        url = f"http://{self.coordinator.ip}/cli?cmd=setsetting+{self._setting_name}+0"
+        if self._setting_name == "hold_enabled":
+            cmd = "setsetting hold 0"
+        elif self._setting_name == "pre_boil_enabled":
+            cmd = "setsetting boil 0"
+        elif self._setting_name == "chime_enabled":
+            cmd = "setsetting chime 0"
+        elif self._setting_name == "schedule_enabled":
+            cmd = "setsetting schedon 0"
+        else:
+            cmd = f"setsetting {self._setting_name} 0"
+
+        url = f"http://{self.coordinator.ip}/cli?cmd={cmd.replace(' ', '+')}"
         try:
             async with self.coordinator.session.get(url) as response:
                 response.raise_for_status()
