@@ -20,14 +20,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StaggSensor(coordinator, entry, "current_temp", "Current Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer"),
         StaggSensor(coordinator, entry, "target_temp", "Target Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer-check"),
         StaggSensor(coordinator, entry, "state_mode", "State Mode", None, None, "mdi:kettle-steam"),
-        StaggSensor(coordinator, entry, "hold_time", "Hold Time", None, UnitOfTime.MINUTES, "mdi:timer"),
-        StaggSensor(coordinator, entry, "altitude", "Altitude", None, "m", "mdi:elevation-rise"),
-        StaggSensor(coordinator, entry, "language", "Language", None, None, "mdi:translate"),
-        StaggSensor(coordinator, entry, "chime_volume", "Chime Volume", None, None, "mdi:volume-high"),
-        StaggSensor(coordinator, entry, "clock_mode", "Clock Mode", None, None, "mdi:clock-outline"),
-        StaggSensor(coordinator, entry, "temperature_units", "Temperature Units", None, None, "mdi:thermometer"),
         StaggSensor(coordinator, entry, "clock_time", "Clock Time", None, None, "mdi:clock-time-eight-outline"),
-        StaggSensor(coordinator, entry, "schedule_mode", "Schedule Mode", None, None, "mdi:calendar-clock"),
         StaggSensor(coordinator, entry, "schedule_time", "Schedule Time", None, None, "mdi:calendar-clock-outline"),
         StaggSensor(coordinator, entry, "schedule_temperature", "Schedule Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer-auto"),
     ]
@@ -70,35 +63,8 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
             if mode and mode.startswith("S_"):
                 return mode[2:].replace("_", " ").title()
             return mode
-        elif self._type == "hold_time":
-            return self.coordinator.data.get("hold_time_minutes")
-        elif self._type == "altitude":
-            return self.coordinator.data.get("altitude_meters")
-        elif self._type == "language":
-            lang_idx = self.coordinator.data.get("language")
-            try:
-                return ["en", "fr", "es"][int(lang_idx)]
-            except (TypeError, IndexError, ValueError):
-                return lang_idx
-        elif self._type == "chime_volume":
-            vol = self.coordinator.data.get("chime_volume")
-            if vol == 0: return "Off"
-            return vol
-        elif self._type == "clock_mode":
-            cm = self.coordinator.data.get("clock_mode")
-            try:
-                idx = int(cm)
-                if idx == 0: return "off"
-                if idx == 1: return "digital"
-                return "analog"
-            except (TypeError, ValueError):
-                return cm
-        elif self._type == "temperature_units":
-            return self.coordinator.data.get("units", "C")
         elif self._type == "clock_time":
             return self.coordinator.data.get("clock_time")
-        elif self._type == "schedule_mode":
-            return self.coordinator.data.get("schedule_mode")
         elif self._type == "schedule_time":
             return self.coordinator.data.get("schedule_time")
         elif self._type == "schedule_temperature":
