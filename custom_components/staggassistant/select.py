@@ -66,7 +66,15 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
             if val in (3, 4): return "Medium"
             if val == 5: return "High"
             return "Off"
-            
+
+        if self._key == "clock_mode":
+            # clockmode: 0 or 1 = digital, 2 = analog
+            try:
+                idx = int(val)
+                return "analog" if idx == 2 else "digital"
+            except (ValueError, TypeError):
+                return "digital"
+
         if self._key == "language":
             try:
                 idx = int(val)
@@ -77,7 +85,7 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
 
         if val in self._attr_options:
             return val
-            
+
         return self._attr_options[0]
 
     async def async_select_option(self, option: str) -> None:

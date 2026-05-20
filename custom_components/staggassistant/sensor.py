@@ -67,7 +67,11 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
         elif self._type == "altitude":
             return self.coordinator.data.get("altitude_meters")
         elif self._type == "language":
-            return self.coordinator.data.get("language")
+            lang_idx = self.coordinator.data.get("language")
+            try:
+                return ["en", "fr", "es"][int(lang_idx)]
+            except (TypeError, IndexError, ValueError):
+                return lang_idx
         elif self._type == "chime_volume":
             vol = self.coordinator.data.get("chime_volume")
             if vol == 0: return "Off"
@@ -76,7 +80,11 @@ class StaggSensor(CoordinatorEntity, SensorEntity):
             if vol == 5: return "High"
             return vol
         elif self._type == "clock_mode":
-            return self.coordinator.data.get("clock_mode")
+            cm = self.coordinator.data.get("clock_mode")
+            try:
+                return "analog" if int(cm) == 2 else "digital"
+            except (TypeError, ValueError):
+                return cm
             
         return None
 
