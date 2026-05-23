@@ -25,7 +25,6 @@ This integration bypasses the need for an official API by communicating directly
 * **Action Buttons:** Simulate physical button presses (main/back), rotate the dial left/right, sync time from Home Assistant, and force data refresh.
 * **Direct CLI Communication:** Sends commands directly to the device's internal interface.
 * **Configurable:** Adjust the update interval to your liking (default: 15s).
-* **Automatic Entity Cleanup:** Obsolete entities from previous versions are pruned automatically.
 
 ## 📋 Entities Provided
 
