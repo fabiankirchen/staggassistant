@@ -1,3 +1,4 @@
+"""DataUpdateCoordinator for Fellow Stagg EKG Pro integration."""
 import logging
 import re
 import async_timeout
@@ -8,32 +9,33 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 _LOGGER = logging.getLogger(__name__)
 
 class StaggLinkCoordinator(DataUpdateCoordinator):
-    """Zentrale Instanz zum Abrufen der Daten."""
+    """Central instance to fetch data from the kettle CLI API."""
 
     def __init__(self, hass, ip, update_interval_seconds):
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name="StaggLink Kettle",
-            # Wir wandeln die Integer-Sekunden in ein timedelta um
+            # Convert integer seconds into a timedelta object
             update_interval=timedelta(seconds=update_interval_seconds),
         )
         self.ip = ip
         self.session = async_get_clientsession(hass)
 
     async def _async_update_data(self):
-        """Daten von der CLI abrufen."""
+        """Fetch data from the kettle via HTTP CLI commands."""
         state_url = f"http://{self.ip}/cli?cmd=state"
         settings_url = f"http://{self.ip}/cli?cmd=prtsettings"
         
         try:
             async with async_timeout.timeout(20):
-                # 1. State abrufen
+                # 1. Fetch current device state
                 response = await self.session.get(state_url)
                 response.raise_for_status()
                 state_text = await response.text()
                 
-                # 2. Settings abrufen
+                # 2. Fetch system settings dump
                 response_settings = await self.session.get(settings_url)
                 response_settings.raise_for_status()
                 settings_text = await response_settings.text()
@@ -43,12 +45,15 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                 mode_match = re.search(r'mode=([a-zA-Z0-9_]+)', state_text)
                 
                 if not temp_match or not target_match or not mode_match:
-                    raise UpdateFailed(f"Parsing Fehler. Antwort: {state_text}")
+                    raise UpdateFailed(f"Parsing error. Response: {state_text}")
 
                 def parse_float(value):
-                    if value == 'nan': return None
-                    try: return float(value)
-                    except: return None
+                    if value == 'nan': 
+                        return None
+                    try: 
+                        return float(value)
+                    except ValueError: 
+                        return None
 
                 def get_setting_value(name, default=None):
                     match = re.search(rf'\b{name}\s*[:=]\s*([a-zA-Z0-9_.-]+)', settings_text, re.IGNORECASE)
@@ -67,7 +72,7 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                     match = re.search(rf'\b{name}\s*=\s*([0-9]+:[0-9]+)', settings_text, re.IGNORECASE)
                     return match.group(1) if match else default
 
-                # 3. Clock time from prtclock
+                # 3. Fetch current clock time from prtclock
                 clock_time = None
                 try:
                     response_clock = await self.session.get(f"http://{self.ip}/cli?cmd=prtclock")
@@ -120,4 +125,4 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                 }
 
         except Exception as err:
-            raise UpdateFailed(f"Verbindungsfehler: {err}")
+            raise UpdateFailed(f"Connection error: {err}")
