@@ -78,4 +78,4 @@ class StaggNumber(CoordinatorEntity, NumberEntity):
                 response.raise_for_status()
             await self.coordinator.async_request_refresh()
         except Exception as err:
-            _LOGGER.error("Failed to set number value for %s
+            _LOGGER.error("Failed to set number value for %s: %s", self._key, err)
