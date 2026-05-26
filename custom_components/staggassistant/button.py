@@ -1,5 +1,6 @@
 """Support for Fellow Stagg EKG Pro buttons."""
 import logging
+import asyncio
 from datetime import datetime
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -13,10 +14,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
     buttons = [
-        StaggButton(coordinator, entry, "press_button_1", "Press Main Button", "mdi:gesture-tap-button", "1"),
-        StaggButton(coordinator, entry, "press_button_2", "Press Back Button", "mdi:keyboard-backspace", "2"),
+        StaggButton(coordinator, entry, "press_button_2", "Press Main Button", "mdi:knob", "2"),
+        StaggButton(coordinator, entry, "press_button_1", "Press Menu Button", "mdi:menu", "1"),
         StaggButton(coordinator, entry, "rotate_left", "Rotate Dial Left", "mdi:rotate-left", "q"),
         StaggButton(coordinator, entry, "rotate_right", "Rotate Dial Right", "mdi:rotate-right", "w"),
+        StaggButton(coordinator, entry, "long_press_2", "Start Timer", "mdi:timer-play", "_long_press_2"),
         StaggButton(coordinator, entry, "sync_time", "Sync Time", "mdi:clock-check-outline", "_sync_time"),
         StaggButton(coordinator, entry, "reload_data", "Reload Data", "mdi:refresh", "_reload"),
     ]
@@ -49,6 +51,19 @@ class StaggButton(CoordinatorEntity, ButtonEntity):
             await self.coordinator.async_request_refresh()
             return
 
+        if self._command == "_long_press_2":
+            # Hold main dial button (Button A)
+            try:
+                await self.coordinator.session.get(f"http://{self.coordinator.ip}/cli?cmd=2d")
+                # Wait for 2 seconds to simulate long press
+                await asyncio.sleep(2)
+                # Release button
+                await self.coordinator.session.get(f"http://{self.coordinator.ip}/cli?cmd=2u")
+                await self.coordinator.async_request_refresh()
+            except Exception as err:
+                _LOGGER.error("Failed to execute long press for %s: %s", self._key, err)
+            return
+
         if self._command == "_sync_time":
             now = datetime.now()
             cmd = f"setclock+{now.hour}+{now.minute}"
@@ -62,3 +77,4 @@ class StaggButton(CoordinatorEntity, ButtonEntity):
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("Failed to execute button command %s for %s: %s", self._command, self._key, err)
+
