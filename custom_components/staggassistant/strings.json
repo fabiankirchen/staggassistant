@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "StaggAssistant Setup",
-        "description": "Verbinde deinen Fellow Stagg EKG Pro.",
+        "description": "Connect your Fellow Stagg EKG Pro.",
         "data": {
           "ip_address": "IP Address",
           "name": "Name",
@@ -12,11 +12,11 @@
       }
     },
     "error": {
-      "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
-      "invalid_auth": "Gerät antwortet, ist aber kein Stagg EKG Pro."
+      "cannot_connect": "Connection failed (Timeout).",
+      "invalid_auth": "Device responds, but is not a Stagg EKG Pro."
     },
     "abort": {
-      "already_configured": "Gerät ist bereits konfiguriert."
+      "already_configured": "Device is already configured."
     }
   }
 }
