@@ -5,52 +5,19 @@
 # StaggAssistant 🦢☕️
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/miguelcaravantes/staggassistant)](https://github.com/miguelcaravantes/staggassistant/releases)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/fabiankirchen/staggassistant)](https://github.com/fabiankirchen/staggassistant/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Home Assistant integration for the **Fellow Stagg EKG Pro** kettle.
-
-> **This is an expanded fork** of [fabiankirchen/staggassistant](https://github.com/fabiankirchen/staggassistant). Huge thanks to [Fabian Kirchen](https://github.com/fabiankirchen) for the original integration! This fork adds support for sensors, switches, number controls, select dropdowns, and action buttons — going beyond the built-in climate entity to expose more of the kettle's capabilities.
-
 This integration bypasses the need for an official API by communicating directly with the kettle's internal **CLI wrapper** over HTTP.
 
 <br clear="left"/>
 
 ## ✨ Features
 
-* **Climate Entity:** Full climate platform with heat/off modes, target temperature with 0.5°C precision, and current temperature display.
-* **Sensors:** Monitor current/target temperature, state mode (Off, Heat, Hold), clock time, schedule time, and schedule temperature.
-* **Number Controls:** Adjust hold time duration (0-60 min), altitude setting (0-3000 m), and chime volume (0-10) with sliders.
-* **Select Dropdowns:** Choose clock style (off/digital/analog), language (en/fr/es), temperature units (C/F), and schedule mode (off/once/repeat).
-* **Action Buttons:** Simulate physical button presses (main/back), rotate the dial left/right, sync time from Home Assistant, and force data refresh.
-* **Direct CLI Communication:** Sends commands directly to the device's internal interface.
+* **Direct CLI Communication:** Sends commands directly to the device's internal interface (e.g., `ss S_Heat`, `settempr`).
+* **Precision Control:** Supports 0.5°C steps for target temperature.
 * **Configurable:** Adjust the update interval to your liking (default: 15s).
-
-## 📋 Entities Provided
-
-| Platform | Entity | Description |
-|---|---|---|
-| **climate** | Climate | Heat/Off control, target temperature (0.5°C steps), current temp |
-| **sensor** | Current Temperature | Current water temperature |
-| **sensor** | Target Temperature | Target set temperature |
-| **sensor** | State Mode | Kettle state (Off, Heat, Hold, etc.) |
-| **sensor** | Clock Time | Current kettle clock time |
-| **sensor** | Schedule Time | Scheduled time (HH:MM) |
-| **sensor** | Schedule Temperature | Scheduled target temperature |
-| **switch** | Pre-Boil | Toggle pre-boil feature on/off |
-| **number** | Hold Time Duration | Set hold time in minutes (0-60) |
-| **number** | Altitude Setting | Set altitude for boil calibration (0-3000 m) |
-| **number** | Chime Volume | Set chime volume (0-10) |
-| **select** | Clock Style | Choose off, digital, or analog clock display |
-| **select** | Language Selection | Choose English, French, or Spanish |
-| **select** | Temperature Units | Switch between Celsius and Fahrenheit |
-| **select** | Schedule Mode | Choose off, once, or repeat schedule |
-| **button** | Press Main Button | Simulate pressing the main dial button |
-| **button** | Press Back Button | Simulate pressing the back button |
-| **button** | Rotate Dial Left | Rotate the dial counter-clockwise |
-| **button** | Rotate Dial Right | Rotate the dial clockwise |
-| **button** | Sync Time | Sync Home Assistant time to the kettle |
-| **button** | Reload Data | Force refresh of kettle data |
 
 ## 🚀 Installation
 
@@ -58,16 +25,16 @@ This integration bypasses the need for an official API by communicating directly
 
 1.  Open HACS in Home Assistant.
 2.  Go to **Integrations** > Top right menu (**⋮**) > **Custom repositories**.
-3.  Add the URL of this repository: `https://github.com/miguelcaravantes/staggassistant`
+3.  Add the URL of this repository: `https://github.com/fabiankirchen/staggassistant`
 4.  Category: **Integration**.
 5.  Click **Add**, then search for "StaggAssistant" in the list and install it.
 6.  Restart Home Assistant.
 
 ### Option 2: Manual
 
-1.  Download the latest release from the [Releases section](https://github.com/miguelcaravantes/staggassistant/releases).
+1.  Download the latest release from the [Releases section](https://github.com/fabiankirchen/staggassistant/releases).
 2.  Unzip the file.
-3.  Copy the `custom_components/staggassistant` folder into your `custom_components` directory (`/config/custom_components/staggassistant`).
+3.  Copy the `staggassistant` folder into your `custom_components` directory (`/config/custom_components/staggassistant`).
 4.  Restart Home Assistant.
 
 ## ⚙️ Configuration
@@ -77,22 +44,13 @@ This integration bypasses the need for an official API by communicating directly
 3.  Search for **StaggAssistant**.
 4.  Enter the **IP address** of your kettle.
 
-## 🔀 Differences from Original
+## 🤖 Disclaimer
 
-This fork extends the original [StaggAssistant by Fabian Kirchen](https://github.com/fabiankirchen/staggassistant) with the following additions beyond the core climate control:
-
-* Added **sensor** platform for temperature, mode, clock, and schedule monitoring
-* Added **number** platform for hold time, altitude, and chime volume controls
-* Added **select** platform for clock style, language, temperature units, and schedule mode
-* Added **switch** platform for pre-boil toggling
-* Added **button** platform for physical button/dial simulation, time sync, and data reload
-* Coordinator now fetches both `state` and `prtsettings` endpoints (plus `prtclock`)
-* Human-readable state mode names, schedule temperature parsing, and automatic entity cleanup
+This integration is purely vibe coded. I’ve got a very limited coding knowledge and therefore cannot guarantee anything. I built this integration for myself, but maybe you can need it. If you can improve it – feel free, I’m happy to help as much as I can.
 
 ## ❤️ Credits
 
-* **Original integration** by [Fabian Kirchen](https://github.com/fabiankirchen) — [fabiankirchen/staggassistant](https://github.com/fabiankirchen/staggassistant)
-* Big thanks to the repos **[stagg-ekg-pro](https://github.com/tomtastic/stagg-ekg-pro)** & **[homebridge-kettle](https://github.com/Willmac16/homebridge-kettle/tree/ekg-pro-cli)** through which the CLI communication method was discovered.
+Big thanks to the repos **[stagg-ekg-pro](https://github.com/tomtastic/stagg-ekg-pro)** & **[homebridge-kettle](https://github.com/Willmac16/homebridge-kettle/tree/ekg-pro-cli)** through which I discovered how I can communicate with the kettle.
 
 ## 📄 License
 
