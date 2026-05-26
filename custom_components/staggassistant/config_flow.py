@@ -32,7 +32,6 @@ class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(CONF_IP_ADDRESS): str,
                 vol.Optional(CONF_NAME, default="Stagg Kettle"): str,
-                # Hier ist das neue Feld mit Default 15
                 vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
             }),
             errors=errors
