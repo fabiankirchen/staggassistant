@@ -31,9 +31,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             coordinator, entry, "schedule_mode", "Schedule Mode",
             ["off", "once", "repeat"], "mdi:calendar-clock",
             lambda val: (
-                "setsetting schedon 0" if val == "off"
-                else "setsetting schedon 1 setsetting Repeat_sched 0" if val == "once"
-                else "setsetting schedon 1 setsetting Repeat_sched 1"
+                ["setsetting schedon 0"] if val == "off"
+                else ["setsetting schedon 1", "setsetting Repeat_sched 0"] if val == "once"
+                else ["setsetting schedon 1", "setsetting Repeat_sched 1"]
             )
         ),
     ]
@@ -69,7 +69,6 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
         val = self.coordinator.data.get(self._key)
         
         if self._key == "clock_mode":
-            # clockmode: 0=off, 1=digital, 2=analog
             try:
                 idx = int(val)
                 if idx == 0: return "off"
@@ -93,12 +92,18 @@ class StaggSelect(CoordinatorEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        raw_cmd = self._command_generator(option)
-        cmd = raw_cmd.replace(" ", "+")
-        url = f"http://{self.coordinator.ip}/cli?cmd={cmd}"
-        try:
-            async with self.coordinator.session.get(url) as response:
-                response.raise_for_status()
-            await self.coordinator.async_request_refresh()
-        except Exception as err:
-            _LOGGER.error("Failed to select option %s for %s: %s", option, self._key, err)
+        raw_cmds = self._command_generator(option)
+        
+        if isinstance(raw_cmds, str):
+            raw_cmds = [raw_cmds]
+            
+        for raw_cmd in raw_cmds:
+            cmd = raw_cmd.replace(" ", "+")
+            url = f"http://{self.coordinator.ip}/cli?cmd={cmd}"
+            try:
+                async with self.coordinator.session.get(url) as response:
+                    response.raise_for_status()
+            except Exception as err:
+                _LOGGER.error("Failed to select option %s for %s: %s", option, self._key, err)
+                
+        await self.coordinator.async_request_refresh()
