@@ -14,7 +14,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     selects = [
         StaggSelect(
             coordinator, entry, "clock_mode", "Clock Style",
-            ["off", "digital", "analog"], "mdi:clock-outline",
+            ["off", "digital", "analog"], "mdi:clock-edit-outline",
             lambda val: "setsetting+clockmode+0" if val == "off" else ("setdigital" if val == "digital" else "setanalog")
         ),
         StaggSelect(
