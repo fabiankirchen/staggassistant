@@ -19,8 +19,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         ),
         StaggSelect(
             coordinator, entry, "language", "Language Selection", 
-            ["en", "fr", "es"], "mdi:translate",
-            lambda val: f"setsetting language {['en', 'fr', 'es'].index(val)}"
+            ["en", "fr", "es", "zh-Hans", "zh-Hant", "ko", "ja"], "mdi:translate",
+            lambda val: f"setsetting language {['en', 'fr', 'es', 'zh-Hans', 'zh-Hant', 'ko', 'ja'].index(val)}"
         ),
         StaggSelect(
             coordinator, entry, "units", "Temperature Units",
@@ -32,8 +32,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             ["off", "once", "repeat"], "mdi:calendar-clock",
             lambda val: (
                 "setsetting schedon 0" if val == "off"
-                else "setsetting schedon 1" if val == "once"
-                else "setsetting schedon 1"
+                else "setsetting schedon 1 setsetting Repeat_sched 0" if val == "once"
+                else "setsetting schedon 1 setsetting Repeat_sched 1"
             )
         ),
     ]
