@@ -43,7 +43,7 @@ home-assistant.log.*
 ozw_log.txt
 
 # Development files
-# custom_components
+custom_components
 
 ### macOS ###
 # General
