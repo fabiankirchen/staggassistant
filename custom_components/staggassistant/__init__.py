@@ -4,24 +4,24 @@ from .const import DOMAIN, PLATFORMS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 from .coordinator import StaggLinkCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Setup StaggAssistant über die UI."""
+    """Set up StaggAssistant from a config entry."""
     
-    # Intervall aus der Config lesen, oder Default nutzen falls fehlt
+    # Get scan interval from config entry, fallback to default if missing
     interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
-    # Coordinator initialisieren
+    # Initialize the data coordinator
     coordinator = StaggLinkCoordinator(hass, entry.data["ip_address"], interval)
     await coordinator.async_config_entry_first_refresh()
 
-    # Daten in HA speichern
+    # Store coordinator instance in hass data
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     
-    # Plattformen (Climate) laden
+    # Forward the setup to all defined platforms (climate, sensor, switch, etc.)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Integration entfernen."""
+    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
