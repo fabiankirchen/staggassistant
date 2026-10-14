@@ -10,20 +10,25 @@ class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             session = async_get_clientsession(self.hass)
-            url = f"http://{user_input[CONF_IP_ADDRESS]}/cli?cmd=state"
+            host = user_input[CONF_IP_ADDRESS]
             try:
-                response = await session.get(url, timeout=5)
-                if response.status == 200:
-                    text = await response.text()
-                    if "mode=" in text or "tempr=" in text:
-                        return self.async_create_entry(
-                            title=user_input[CONF_NAME], 
-                            data=user_input
-                        )
-                    else:
-                         errors["base"] = "invalid_auth"
-                else:
-                    errors["base"] = "cannot_connect"
+                # Firmware 1.2.26+ serves the state as JSON at /temp
+                response = await session.get(f"http://{host}/temp", timeout=5)
+                text = await response.text() if response.status == 200 else ""
+                looks_like_kettle = '"state"' in text or '"temp"' in text
+
+                if not looks_like_kettle:
+                    # Fallback: legacy text CLI (firmware < 1.2.26)
+                    response = await session.get(f"http://{host}/cli?cmd=state", timeout=5)
+                    text = await response.text() if response.status == 200 else ""
+                    looks_like_kettle = "mode=" in text or "tempr=" in text
+
+                if looks_like_kettle:
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME],
+                        data=user_input
+                    )
+                errors["base"] = "invalid_auth"
             except Exception:
                 errors["base"] = "cannot_connect"
 

@@ -8,6 +8,19 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _parse_float(value):
+    """Convert a value to float, treating None/NaN/'nan' as missing."""
+    if value is None or value == 'nan':
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    # NaN is the only value that is not equal to itself
+    return None if result != result else result
+
+
 class StaggLinkCoordinator(DataUpdateCoordinator):
     """Central instance to fetch data from the kettle CLI API."""
 
@@ -23,37 +36,62 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
         self.ip = ip
         self.session = async_get_clientsession(hass)
 
+    async def _read_state(self):
+        """Return (temp, target, mode) for the kettle.
+
+        Firmware 1.2.26 dropped the textual `/cli?cmd=state` output (the CLI
+        endpoint now only echoes an input form) and exposes the live state as
+        JSON at `/temp`:
+            {"temp":27.4,"temp_set":97.0,"state":"S_Off","pwm":-10,"timestamp":...}
+        Temperatures are in degrees Celsius and `state` keeps the same mode
+        tokens as before (S_Off, S_Heat, ...). We prefer that endpoint and fall
+        back to the legacy text command so older firmware keeps working.
+        """
+        # Preferred: JSON endpoint (firmware 1.2.26+)
+        try:
+            response = await self.session.get(f"http://{self.ip}/temp")
+            if response.status == 200:
+                data = await response.json(content_type=None)
+                if "state" in data:
+                    return (
+                        _parse_float(data.get("temp")),
+                        _parse_float(data.get("temp_set")),
+                        data["state"],
+                    )
+        except Exception:
+            pass  # fall through to the legacy text endpoint
+
+        # Fallback: legacy text CLI (firmware < 1.2.26)
+        response = await self.session.get(f"http://{self.ip}/cli?cmd=state")
+        response.raise_for_status()
+        state_text = await response.text()
+        temp_match = re.search(r'tempr=([0-9.]+|nan)', state_text)
+        target_match = re.search(r'temprT=([0-9.]+|nan)', state_text)
+        mode_match = re.search(r'mode=([a-zA-Z0-9_]+)', state_text)
+        if not temp_match or not target_match or not mode_match:
+            raise UpdateFailed(f"Parsing error. Response: {state_text}")
+        return (
+            _parse_float(temp_match.group(1)),
+            _parse_float(target_match.group(1)),
+            mode_match.group(1),
+        )
+
     async def _async_update_data(self):
-        """Fetch data from the kettle via HTTP CLI commands."""
-        state_url = f"http://{self.ip}/cli?cmd=state"
+        """Fetch data from the kettle."""
         settings_url = f"http://{self.ip}/cli?cmd=prtsettings"
-        
+
         try:
             async with async_timeout.timeout(20):
-                # 1. Fetch current device state
-                response = await self.session.get(state_url)
-                response.raise_for_status()
-                state_text = await response.text()
-                
-                # 2. Fetch system settings dump
+                # 1. Fetch current device state (temperature / target / mode)
+                temp, target, mode = await self._read_state()
+
+                # 2. Fetch system settings dump.
+                #    Firmware 1.2.26+ no longer prints CLI output, so on those
+                #    devices the parsed settings below simply fall back to their
+                #    defaults (the climate entity keeps working from /temp).
                 response_settings = await self.session.get(settings_url)
                 response_settings.raise_for_status()
                 settings_text = await response_settings.text()
-                
-                temp_match = re.search(r'tempr=([0-9.]+|nan)', state_text)
-                target_match = re.search(r'temprT=([0-9.]+|nan)', state_text)
-                mode_match = re.search(r'mode=([a-zA-Z0-9_]+)', state_text)
-                
-                if not temp_match or not target_match or not mode_match:
-                    raise UpdateFailed(f"Parsing error. Response: {state_text}")
-
-                def parse_float(value):
-                    if value == 'nan': 
-                        return None
-                    try: 
-                        return float(value)
-                    except ValueError: 
-                        return None
 
                 def get_setting_value(name, default=None):
                     match = re.search(rf'\b{name}\s*[:=]\s*([a-zA-Z0-9_.-]+)', settings_text, re.IGNORECASE)
@@ -105,9 +143,9 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
                     schedule_mode = "once"
 
                 return {
-                    "temp": parse_float(temp_match.group(1)),
-                    "target": parse_float(target_match.group(1)),
-                    "mode": mode_match.group(1),
+                    "temp": temp,
+                    "target": target,
+                    "mode": mode,
                     "hold_time_minutes": get_setting_value("hold", 30),
                     "hold_enabled": 1 if get_setting_value("hold", 0) > 0 else 0,
                     "pre_boil_enabled": get_setting_value("boil", 0),
