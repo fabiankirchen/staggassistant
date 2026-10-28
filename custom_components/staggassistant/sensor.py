@@ -1,81 +1,160 @@
 """Support for Fellow Stagg EKG Pro sensors."""
 import logging
+from dataclasses import dataclass
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import UnitOfTemperature
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_ENABLE_EXTENDED_ENTITIES, DEFAULT_ENABLE_EXTENDED_ENTITIES, DOMAIN
+from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+EXTENDED_SENSOR_KEYS = {"boil_temp", "schedule_time", "schedule_temperature"}
+
+
+@dataclass(frozen=True, kw_only=True)
+class StaggSensorDescription(SensorEntityDescription):
+    """Describes a Stagg sensor entity."""
+
+    key: str
+    name: str
+
+
+SENSOR_DESCRIPTIONS: tuple[StaggSensorDescription, ...] = (
+    StaggSensorDescription(
+        key="current_temp",
+        translation_key="current_temp",
+        name="Current Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer",
+    ),
+    StaggSensorDescription(
+        key="target_temp",
+        translation_key="target_temp",
+        name="Target Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer-check",
+    ),
+    StaggSensorDescription(
+        key="boil_temp",
+        translation_key="boil_temp",
+        name="Boil Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:water-boiler",
+        entity_registry_enabled_default=False,
+    ),
+    StaggSensorDescription(
+        key="state_mode",
+        translation_key="state_mode",
+        name="State Mode",
+        icon="mdi:kettle-steam",
+    ),
+    StaggSensorDescription(
+        key="clock_time",
+        translation_key="clock_time",
+        name="Clock Time",
+        icon="mdi:clock-time-eight-outline",
+    ),
+    StaggSensorDescription(
+        key="schedule_time",
+        translation_key="schedule_time",
+        name="Schedule Time",
+        icon="mdi:calendar-clock-outline",
+        entity_registry_enabled_default=False,
+    ),
+    StaggSensorDescription(
+        key="schedule_temperature",
+        translation_key="schedule_temperature",
+        name="Schedule Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer-auto",
+        entity_registry_enabled_default=False,
+    ),
+)
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up StaggLink sensors from a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    
-    sensors = [
-        StaggSensor(coordinator, entry, "current_temp", "Current Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer"),
-        StaggSensor(coordinator, entry, "target_temp", "Target Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer-check"),
-        StaggSensor(coordinator, entry, "state_mode", "State Mode", None, None, "mdi:kettle-steam"),
-        StaggSensor(coordinator, entry, "clock_time", "Clock Time", None, None, "mdi:clock-time-eight-outline"),
-        StaggSensor(coordinator, entry, "schedule_time", "Schedule Time", None, None, "mdi:calendar-clock-outline"),
-        StaggSensor(coordinator, entry, "schedule_temperature", "Schedule Temperature", SensorDeviceClass.TEMPERATURE, None, "mdi:thermometer-auto"),
+    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
+    enable_extended = entry.options.get(
+        CONF_ENABLE_EXTENDED_ENTITIES,
+        entry.data.get(CONF_ENABLE_EXTENDED_ENTITIES, DEFAULT_ENABLE_EXTENDED_ENTITIES),
+    )
+    entities = [
+        StaggSensor(coordinator, entry, desc)
+        for desc in SENSOR_DESCRIPTIONS
+        if enable_extended or desc.key not in EXTENDED_SENSOR_KEYS
     ]
-    
-    async_add_entities(sensors, True)
+    async_add_entities(entities, True)
 
-class StaggSensor(CoordinatorEntity, SensorEntity):
+
+class StaggSensor(CoordinatorEntity[StaggLinkCoordinator], SensorEntity):
     """Representation of a Stagg EKG Pro sensor."""
 
-    def __init__(self, coordinator, entry, sensor_type, name_suffix, device_class, unit_of_measurement, icon):
+    entity_description: StaggSensorDescription
+
+    def __init__(self, coordinator: StaggLinkCoordinator, entry, description: StaggSensorDescription):
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._type = sensor_type
-        self._attr_name = f"{entry.data.get('name', 'Stagg Kettle')} {name_suffix}"
-        self._attr_unique_id = f"stagg_{entry.data['ip_address'].replace('.', '_')}_{sensor_type}"
-        self._attr_device_class = device_class
-        self._attr_native_unit_of_measurement = unit_of_measurement
-        self._attr_icon = icon
-        self._attr_has_entity_name = False
+        self.entity_description = description
+        self._ip = entry.data["ip_address"]
+        device_id = f"stagglink_{self._ip.replace('.', '_')}"
 
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"stagglink_{entry.data['ip_address'].replace('.', '_')}")},
-            "name": entry.data.get("name", "Stagg Kettle"),
-            "manufacturer": "Fellow",
-            "model": "Stagg EKG Pro",
-        }
+        self._attr_has_entity_name = True
+        self._attr_translation_key = description.key
+        self._attr_unique_id = f"stagg_{self._ip.replace('.', '_')}_{description.key}"
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_id)},
+            name=entry.data.get("name", "Stagg Kettle"),
+            manufacturer="Fellow",
+            model="Stagg EKG Pro",
+            configuration_url=f"http://{self._ip}",
+        )
 
     @property
     def native_value(self):
         """Return the state of the sensor."""
         if not self.coordinator.data:
             return None
-            
-        if self._type == "current_temp":
+
+        key = self.entity_description.key
+        if key == "current_temp":
             return self.coordinator.data.get("temp")
-        elif self._type == "target_temp":
+        if key == "target_temp":
             return self.coordinator.data.get("target")
-        elif self._type == "state_mode":
+        if key == "boil_temp":
+            return self.coordinator.data.get("boil_temp")
+        if key == "state_mode":
             mode = self.coordinator.data.get("mode")
-            if mode and mode.startswith("S_"):
+            if not mode:
+                return None
+            if mode == "S_NoWater":
+                return "Low Water Alert"
+            if mode == "S_Standby":
+                return "Standby"
+            if mode == "S_StartupToTempr":
+                return "Heating to Target"
+            if mode.startswith("S_"):
                 return mode[2:].replace("_", " ").title()
             return mode
-        elif self._type == "clock_time":
+        if key == "clock_time":
             return self.coordinator.data.get("clock_time")
-        elif self._type == "schedule_time":
+        if key == "schedule_time":
             return self.coordinator.data.get("schedule_time")
-        elif self._type == "schedule_temperature":
+        if key == "schedule_temperature":
             return self.coordinator.data.get("schedule_temperature")
 
         return None
-
-    @property
-    def native_unit_of_measurement(self):
-        """Return the unit of measurement."""
-        if self._type in ("current_temp", "target_temp"):
-            unit = self.coordinator.data.get("units", "C") if self.coordinator.data else "C"
-            return UnitOfTemperature.FAHRENHEIT if unit == "F" else UnitOfTemperature.CELSIUS
-        return self._attr_native_unit_of_measurement

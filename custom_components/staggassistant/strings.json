@@ -13,10 +13,134 @@
     },
     "error": {
       "cannot_connect": "Connection failed (Timeout).",
-      "invalid_auth": "Device responds, but is not a Stagg EKG Pro."
+      "invalid_auth": "Device responds, but is not a Stagg EKG Pro.",
+      "invalid_ip": "Invalid IP address or hostname format."
     },
     "abort": {
       "already_configured": "Device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "StaggAssistant Options",
+        "description": "Adjust integration settings.\n\n⚠️ **Notice on extended entities:** On firmware 1.2.26+, Fellow blocks reading device settings over Wi-Fi. Extended switches, sliders, and sensors (hold duration, chime volume, boil temperature, schedule, altitude) rely on local optimistic caching and estimates, and are hidden by default to avoid 'Unknown' states.",
+        "data": {
+          "scan_interval": "Update Interval (Seconds)",
+          "enable_extended_entities": "Enable extended settings & sensors (Advanced)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_temp": {
+        "name": "Current temperature"
+      },
+      "target_temp": {
+        "name": "Target temperature"
+      },
+      "boil_temp": {
+        "name": "Boil temperature"
+      },
+      "state_mode": {
+        "name": "State mode"
+      },
+      "clock_time": {
+        "name": "Clock time"
+      },
+      "schedule_time": {
+        "name": "Schedule time"
+      },
+      "schedule_temperature": {
+        "name": "Schedule temperature"
+      }
+    },
+    "binary_sensor": {
+      "is_docked": {
+        "name": "Docked"
+      },
+      "no_water": {
+        "name": "Low water warning"
+      },
+      "target_reached": {
+        "name": "Target temperature reached"
+      },
+      "in_pre_boil": {
+        "name": "Pre-boil active"
+      },
+      "is_heating": {
+        "name": "Heating active"
+      },
+      "is_holding": {
+        "name": "Hold active"
+      }
+    },
+    "switch": {
+      "pre_boil": {
+        "name": "Pre-boil"
+      }
+    },
+    "number": {
+      "hold_time_minutes": {
+        "name": "Hold time duration"
+      },
+      "altitude_meters": {
+        "name": "Altitude setting"
+      },
+      "chime_volume": {
+        "name": "Chime volume"
+      },
+      "schedule_temperature": {
+        "name": "Schedule temperature"
+      }
+    },
+    "select": {
+      "clock_mode": {
+        "name": "Clock style",
+        "state": {
+          "off": "Off",
+          "digital": "Digital",
+          "analog": "Analog"
+        }
+      },
+      "language": {
+        "name": "Language selection"
+      },
+      "units": {
+        "name": "Temperature units"
+      },
+      "schedule_mode": {
+        "name": "Schedule mode",
+        "state": {
+          "off": "Off",
+          "once": "Once",
+          "repeat": "Repeat daily"
+        }
+      }
+    },
+    "button": {
+      "press_button_2": {
+        "name": "Press main button"
+      },
+      "press_button_1": {
+        "name": "Press menu button"
+      },
+      "rotate_left": {
+        "name": "Rotate dial left"
+      },
+      "rotate_right": {
+        "name": "Rotate dial right"
+      },
+      "long_press_2": {
+        "name": "Start timer"
+      },
+      "sync_time": {
+        "name": "Sync time"
+      },
+      "reload_data": {
+        "name": "Reload data"
+      }
     }
   }
 }
