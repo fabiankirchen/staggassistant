@@ -21,7 +21,8 @@ This integration communicates directly with the kettle's internal interface over
   * **Strict Command Allowlist:** All CLI commands are verified against a regex allowlist with strict parameter bounds, blocking raw GPIO commands (`heaton`, `warmduty`), diagnostics (`htest`), or wipe commands (`clrsettings`).
   * **Guaranteed Dial Release:** Timer button simulation wraps execution in `try...finally:` guaranteeing the release command (`2u`) is always sent.
 * **Persistent Settings Storage:** Persists kettle settings (hold duration, chime, altitude, schedule, clock mode) using Home Assistant's native storage (`Store`) so settings survive Home Assistant restarts even when firmware restricts Wi-Fi reading.
-* **Configurable Options Flow:** Configure polling rate (5–120s) and selectively enable extended settings & sensors anytime via the Home Assistant UI.
+* **Configurable Options Flow:** Configure polling rate (5–120s), update the kettle's IP address, rediscover it over Bluetooth, and selectively enable extended settings & sensors anytime via the Home Assistant UI.
+* **Bluetooth-Assisted Setup:** Scan for the kettle over BLE and read its current IPv4 address directly from the kettle's status characteristic, with ARP-based matching and manual IP entry as fallbacks.
 * **Full Multilingual Support:** Native English and German (Deutsch) translations for setup, configuration options, entity names, and state selectors.
 
 ---
@@ -41,9 +42,21 @@ On firmware 1.2.26+, reading device settings (such as current hold time, chime v
 
 ## ⚙️ Configuration & Options
 
-After adding the integration, click **Configure** on the StaggAssistant card under **Settings > Devices & Services**:
+After adding the integration, click **Configure** on the StaggAssistant card under **Settings > Devices & Services**. The options menu offers:
 
-* **Update Interval (Seconds):** Choose how often Home Assistant polls the kettle (5 to 120 seconds, default: 15s).
+* **General settings & IP address:** Change the polling interval (5–120 seconds, default: 15s), enable extended entities, or update the kettle's IP address manually. If only the interval or extended-entity setting changes, the kettle does not need to be online.
+* **Find kettle via Bluetooth:** Rediscover the kettle and update its IP address automatically. This is the easiest way to fix an IP address that changed after a DHCP lease renewal.
+
+### Automatic IP discovery over Bluetooth
+
+The Stagg EKG Pro advertises a BLE name of the form `EKG-aa-bb-cc`, where the last three octets are the last three octets of the kettle's Wi-Fi MAC address. The integration can read the kettle's current IPv4 address directly from its BLE status characteristic, so normally only the kettle needs to be selected:
+
+1. Open **Configure** → **Find kettle via Bluetooth** (or choose **Scan for kettle (Bluetooth)** during initial setup).
+2. Select your `EKG-…` device from the list.
+3. The integration reads the IP address and validates it over HTTP, then reloads automatically.
+
+If the BLE status characteristic cannot be read, the integration falls back to matching the BLE name against the Home Assistant host's ARP table. This requires Home Assistant to be on the same layer-2 network as the kettle (host networking, not a bridged/NAT Docker network). If both methods fail, the manual IP field remains available.
+
 * **Enable extended settings & sensors (Advanced):**
   * *Disabled (Default):* Exposes the core entities (Climate controller, Current Temperature, Target Temperature, Docked, Heating Active, Hold Active, Low Water Warning, Buttons).
   * *Enabled:* Unlocks extended controls (Pre-Boil switch, Hold Time slider, Altitude setting, Chime volume, Clock style, Schedule controls, Boil temperature sensor). On firmware 1.2.26+, these rely on persistent local caching (`Store`) and altitude estimates.
@@ -122,8 +135,12 @@ If you would like to test experimental features and rapid automated updates befo
 1. In Home Assistant, go to **Settings** > **Devices & Services**.
 2. Click **Add Integration** in the bottom right corner.
 3. Search for **StaggAssistant**.
-4. Enter the **IP address** of your kettle and choose your preferred update interval.
+4. Choose one of:
+   * **Scan for kettle (Bluetooth):** Select your `EKG-…` device. The integration reads and validates the IP address automatically.
+   * **Enter IP address manually:** Enter the kettle's IP address and choose your preferred update interval.
 5. Click **Submit**.
+
+The Bluetooth option requires the Home Assistant **Bluetooth** integration and a Bluetooth adapter (or an active ESPHome Bluetooth proxy) that can reach the kettle. Manual IP entry works without Bluetooth.
 
 ---
 

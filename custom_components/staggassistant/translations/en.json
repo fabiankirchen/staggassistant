@@ -3,18 +3,36 @@
     "step": {
       "user": {
         "title": "StaggAssistant Setup",
-        "description": "Connect your Fellow Stagg EKG Pro.",
+        "description": "Find your kettle over Bluetooth, or enter its IP address manually.",
+        "menu_options": {
+          "bluetooth": "Scan for kettle (Bluetooth)",
+          "manual": "Enter IP address manually"
+        }
+      },
+      "manual": {
+        "title": "Manual setup",
+        "description": "Enter the IP address or hostname of your Fellow Stagg EKG Pro.",
         "data": {
           "ip_address": "IP Address",
           "name": "Name",
           "scan_interval": "Update Interval (Seconds)"
+        }
+      },
+      "bluetooth": {
+        "title": "Select your Stagg kettle",
+        "description": "Make sure the kettle is powered and nearby. {device_count} kettle(s) found over Bluetooth. Selecting a kettle reads its IP address automatically.",
+        "data": {
+          "ble_address": "Bluetooth device"
         }
       }
     },
     "error": {
       "cannot_connect": "Connection failed (Timeout).",
       "invalid_auth": "Device responds, but is not a Stagg EKG Pro.",
-      "invalid_ip": "Invalid IP address or hostname format."
+      "invalid_ip": "Invalid IP address or hostname format.",
+      "no_bluetooth_devices": "No Stagg kettle was found over Bluetooth. Make sure the kettle is powered and your Home Assistant Bluetooth integration is working, or enter the IP address manually.",
+      "cannot_resolve_ip": "The kettle was found over Bluetooth, but its IP address could not be determined. Try again, or enter the IP address manually.",
+      "already_configured": "This kettle is already configured."
     },
     "abort": {
       "already_configured": "Device is already configured."
@@ -24,12 +42,36 @@
     "step": {
       "init": {
         "title": "StaggAssistant Options",
-        "description": "Adjust integration settings.\n\n⚠️ **Notice on extended entities:** On firmware 1.2.26+, Fellow blocks reading device settings over Wi-Fi. Extended switches, sliders, and sensors (hold duration, chime volume, boil temperature, schedule, altitude) rely on local optimistic caching and estimates, and are hidden by default to avoid 'Unknown' states.",
+        "description": "Adjust integration settings, update the kettle's IP address, or rediscover it over Bluetooth.",
+        "menu_options": {
+          "settings": "General settings & IP address",
+          "bluetooth": "Find kettle via Bluetooth"
+        }
+      },
+      "settings": {
+        "title": "StaggAssistant Settings",
+        "description": "Update the polling interval, extended entities, or the kettle's IP address.\n\n⚠️ **Notice on extended entities:** On firmware 1.2.26+, Fellow blocks reading device settings over Wi-Fi. Extended switches, sliders, and sensors (hold duration, chime volume, boil temperature, schedule, altitude) rely on local optimistic caching and estimates, and are hidden by default to avoid 'Unknown' states.",
         "data": {
+          "ip_address": "IP Address",
           "scan_interval": "Update Interval (Seconds)",
           "enable_extended_entities": "Enable extended settings & sensors (Advanced)"
         }
+      },
+      "bluetooth": {
+        "title": "Find kettle via Bluetooth",
+        "description": "Current IP address: {current_ip}\n\nMake sure the kettle is powered and nearby. {device_count} kettle(s) found over Bluetooth. Selecting a kettle updates its IP address automatically.",
+        "data": {
+          "ble_address": "Bluetooth device"
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Connection failed (Timeout).",
+      "invalid_auth": "Device responds, but is not a Stagg EKG Pro.",
+      "invalid_ip": "Invalid IP address or hostname format.",
+      "no_bluetooth_devices": "No Stagg kettle was found over Bluetooth. Make sure the kettle is powered and your Home Assistant Bluetooth integration is working, or enter the IP address manually.",
+      "cannot_resolve_ip": "The kettle was found over Bluetooth, but its IP address could not be determined. Try again, or enter the IP address manually.",
+      "already_configured": "This kettle is already configured."
     }
   },
   "entity": {

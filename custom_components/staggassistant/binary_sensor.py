@@ -10,7 +10,13 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_ENABLE_EXTENDED_ENTITIES, DEFAULT_ENABLE_EXTENDED_ENTITIES, DOMAIN
+from .const import (
+    CONF_ENABLE_EXTENDED_ENTITIES,
+    DEFAULT_ENABLE_EXTENDED_ENTITIES,
+    DOMAIN,
+    get_device_identifier,
+    get_stable_id,
+)
 from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -93,12 +99,12 @@ class StaggBinarySensor(CoordinatorEntity[StaggLinkCoordinator], BinarySensorEnt
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._ip = entry.data["ip_address"]
-        device_id = f"stagglink_{self._ip.replace('.', '_')}"
+        self._ip = coordinator.ip
+        device_id = get_device_identifier(entry)
 
         self._attr_has_entity_name = True
         self._attr_translation_key = description.key
-        self._attr_unique_id = f"stagg_{self._ip.replace('.', '_')}_{description.key}"
+        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{description.key}"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
