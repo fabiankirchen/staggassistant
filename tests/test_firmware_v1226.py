@@ -18,42 +18,9 @@ class MockClimateEntity:
 class MockNumberEntity:
     pass
 
-class MockConfigFlow:
-    def __init_subclass__(cls, domain=None, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls.domain = domain
-
-    async def async_set_unique_id(self, unique_id):
-        self.unique_id = unique_id
-
-    def _abort_if_unique_id_configured(self):
-        pass
-
-    def async_create_entry(self, title, data):
-        return {"type": "create_entry", "title": title, "data": data}
-
-    def async_show_form(self, **kwargs):
-        return {"type": "form", **kwargs}
-
-class MockOptionsFlow:
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
-    def async_create_entry(self, title, data):
-        return {"type": "create_entry", "title": title, "data": data}
-
-    def async_show_form(self, **kwargs):
-        return {"type": "form", **kwargs}
-
 sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
 sys.modules["homeassistant.components.climate"].ClimateEntity = MockClimateEntity
 sys.modules["homeassistant.components.number"].NumberEntity = MockNumberEntity
-sys.modules["homeassistant.config_entries"].ConfigFlow = MockConfigFlow
-sys.modules["homeassistant.config_entries"].OptionsFlow = MockOptionsFlow
-sys.modules["homeassistant"].config_entries = sys.modules["homeassistant.config_entries"]
-sys.modules.pop("custom_components.staggassistant.config_flow", None)
-if "voluptuous" not in sys.modules:
-    sys.modules["voluptuous"] = MagicMock()
 
 import unittest
 from custom_components.staggassistant.binary_sensor import (
@@ -480,7 +447,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         mock_session.get = MagicMock(return_value=cm)
 
         with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_get_clientsession",
+            "custom_components.staggassistant.kettle_discovery.async_get_clientsession",
             return_value=mock_session,
         ):
             result = await flow.async_step_user({"ip_address": "192.168.1.50"})
@@ -514,7 +481,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         mock_session.get = MagicMock(side_effect=side_effect)
 
         with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_get_clientsession",
+            "custom_components.staggassistant.kettle_discovery.async_get_clientsession",
             return_value=mock_session,
         ):
             result = await flow.async_step_user({"ip_address": "192.168.1.50"})
@@ -779,16 +746,25 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         flow = StaggAssistantConfigFlow.async_get_options_flow(entry)
         self.assertIsInstance(flow, StaggAssistantOptionsFlow)
 
-        # In modern HA, HA sets flow.config_entry
+        # In modern HA, HA sets flow.config_entry and flow.hass
         flow.config_entry = entry
+        flow.hass = MagicMock()
 
-        # Test initial form show
+        # Test initial menu
         form_res = await flow.async_step_init()
-        self.assertEqual(form_res["type"], "form")
+        self.assertEqual(form_res["type"], "menu")
         self.assertEqual(form_res["step_id"], "init")
+        self.assertIn("settings", form_res["menu_options"])
+        self.assertIn("bluetooth", form_res["menu_options"])
 
-        # Test options submission
-        submit_res = await flow.async_step_init({"scan_interval": 30, "enable_extended_entities": True})
+        # Test options submission through the settings step
+        with unittest.mock.patch(
+            "custom_components.staggassistant.config_flow.async_validate_kettle",
+            AsyncMock(return_value=None),
+        ):
+            submit_res = await flow.async_step_settings(
+                {"ip_address": "192.168.1.100", "scan_interval": 30, "enable_extended_entities": True}
+            )
         self.assertEqual(submit_res["type"], "create_entry")
         self.assertEqual(submit_res["data"]["scan_interval"], 30)
         self.assertTrue(submit_res["data"]["enable_extended_entities"])
@@ -888,7 +864,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         session.get = MagicMock(side_effect=side_effect)
 
         with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_get_clientsession",
+            "custom_components.staggassistant.kettle_discovery.async_get_clientsession",
             return_value=session,
         ):
             result = await flow.async_step_user({"ip_address": "192.168.1.100"})
