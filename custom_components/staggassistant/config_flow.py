@@ -129,9 +129,7 @@ class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             address = (user_input.get(CONF_BLE_ADDRESS) or "").strip()
-            if not address:
-                errors["base"] = "no_bluetooth_devices"
-            else:
+            if address:
                 resolved = await async_resolve_kettle(self.hass, address)
                 if resolved is None:
                     errors["base"] = "cannot_resolve_ip"
@@ -161,10 +159,12 @@ class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     }
                     return self.async_create_entry(title=name, data=data)
 
-        if not errors:
+        if errors:
+            options = await async_get_kettle_ble_device_map(self.hass, retry_wait=0)
+        else:
             options = await async_get_kettle_ble_device_map(self.hass)
-        if not options and not errors:
-            errors["base"] = "no_bluetooth_devices"
+            if not options:
+                errors["base"] = "no_bluetooth_devices"
 
         if options:
             address_field = vol.Required(CONF_BLE_ADDRESS)
@@ -250,6 +250,12 @@ class StaggAssistantOptionsFlow(config_entries.OptionsFlow):
             return current
         return fallback
 
+    def _schedule_reload_if_unloaded(self) -> None:
+        """Reload immediately if the entry is in SETUP_RETRY without an update listener."""
+        loaded = self.hass.data.get(DOMAIN, {})
+        if not isinstance(loaded, dict) or self.config_entry.entry_id not in loaded:
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+
     async def async_step_settings(self, user_input=None):
         """Manage polling interval, extended entities and the IP address."""
         errors = {}
@@ -291,6 +297,7 @@ class StaggAssistantOptionsFlow(config_entries.OptionsFlow):
                         data=self._updated_entry_data(ip),
                         unique_id=unique_id,
                     )
+                    self._schedule_reload_if_unloaded()
                     return self.async_create_entry(title="", data=options_data)
 
         return self.async_show_form(
@@ -318,9 +325,7 @@ class StaggAssistantOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             address = (user_input.get(CONF_BLE_ADDRESS) or "").strip()
-            if not address:
-                errors["base"] = "no_bluetooth_devices"
-            else:
+            if address:
                 resolved = await async_resolve_kettle(self.hass, address)
                 if resolved is None:
                     errors["base"] = "cannot_resolve_ip"
@@ -347,14 +352,17 @@ class StaggAssistantOptionsFlow(config_entries.OptionsFlow):
                             ),
                             unique_id=unique_id,
                         )
+                        self._schedule_reload_if_unloaded()
                         return self.async_create_entry(
                             title="", data=self._current_options()
                         )
 
-        if not errors:
+        if errors:
+            options = await async_get_kettle_ble_device_map(self.hass, retry_wait=0)
+        else:
             options = await async_get_kettle_ble_device_map(self.hass)
-        if not options and not errors:
-            errors["base"] = "no_bluetooth_devices"
+            if not options:
+                errors["base"] = "no_bluetooth_devices"
 
         if options:
             address_field = vol.Required(CONF_BLE_ADDRESS)
