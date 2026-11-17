@@ -180,7 +180,7 @@ def async_get_kettle_ble_devices(hass: HomeAssistant) -> list[KettleBleDevice]:
 
 
 async def async_get_kettle_ble_device_map(
-    hass: HomeAssistant, wait: float = 0
+    hass: HomeAssistant, wait: float = 0, retry_wait: float = 5
 ) -> dict[str, str]:
     """Return an address -> label map for a config-flow selector."""
     components = getattr(getattr(hass, "config", None), "components", None)
@@ -189,9 +189,9 @@ async def async_get_kettle_ble_device_map(
     if wait:
         await asyncio.sleep(wait)
     devices = async_get_kettle_ble_devices(hass)
-    if not devices:
+    if not devices and retry_wait:
         # Give a freshly powered kettle time to advertise.
-        await asyncio.sleep(8)
+        await asyncio.sleep(retry_wait)
         devices = async_get_kettle_ble_devices(hass)
     return {device.address: device.label for device in devices}
 
@@ -455,6 +455,21 @@ async def async_populate_arp(hass: HomeAssistant) -> None:
     await asyncio.sleep(ARP_POPULATE_WAIT)
 
 
+def _match_arp_table(arp_table: dict[str, str], candidates: set[str]) -> list[str]:
+    """Return matching IPs from an ARP table, preferring full-MAC matches."""
+    exact: list[str] = []
+    suffix_matches: list[str] = []
+    for ip, mac in arp_table.items():
+        normalized = normalize_mac(mac)
+        if not normalized:
+            continue
+        if normalized in candidates:
+            exact.append(ip)
+        elif ":".join(normalized.split(":")[3:]) in candidates:
+            suffix_matches.append(ip)
+    return exact + suffix_matches
+
+
 async def async_resolve_ip_via_arp(
     hass: HomeAssistant, name: str | None, address: str | None
 ) -> list[str]:
@@ -464,9 +479,7 @@ async def async_resolve_ip_via_arp(
         return []
 
     arp_table = await async_read_arp_table(hass)
-    matches = [
-        ip for ip, mac in arp_table.items() if normalize_mac(mac) in candidates
-    ]
+    matches = _match_arp_table(arp_table, candidates)
     if matches:
         return matches
 
@@ -474,7 +487,7 @@ async def async_resolve_ip_via_arp(
     # subnet once and try again.
     await async_populate_arp(hass)
     arp_table = await async_read_arp_table(hass)
-    return [ip for ip, mac in arp_table.items() if normalize_mac(mac) in candidates]
+    return _match_arp_table(arp_table, candidates)
 
 
 async def _read_response_text(response, limit: int = 65536) -> str:

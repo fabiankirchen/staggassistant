@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, get_device_identifier, get_stable_id
+from .const import DOMAIN, get_device_identifier
 from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)

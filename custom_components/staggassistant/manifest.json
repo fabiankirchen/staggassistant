@@ -1,6 +1,7 @@
 {
   "domain": "staggassistant",
   "name": "StaggAssistant",
+  "after_dependencies": ["bluetooth", "network"],
   "codeowners": ["@fabiankirchen"],
   "config_flow": true,
   "documentation": "https://github.com/fabiankirchen/staggassistant",
