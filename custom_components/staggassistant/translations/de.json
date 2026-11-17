@@ -2,19 +2,37 @@
   "config": {
     "step": {
       "user": {
-        "title": "StaggAssistant Setup",
-        "description": "Verbinde deinen Fellow Stagg EKG Pro.",
+        "title": "StaggAssistant Einrichtung",
+        "description": "Finde deinen Wasserkocher über Bluetooth oder gib die IP-Adresse manuell ein.",
+        "menu_options": {
+          "bluetooth": "Wasserkocher suchen (Bluetooth)",
+          "manual": "IP-Adresse manuell eingeben"
+        }
+      },
+      "manual": {
+        "title": "Manuelle Einrichtung",
+        "description": "Gib die IP-Adresse oder den Hostnamen deines Fellow Stagg EKG Pro ein.",
         "data": {
           "ip_address": "IP-Adresse",
           "name": "Name",
           "scan_interval": "Update-Intervall (Sekunden)"
+        }
+      },
+      "bluetooth": {
+        "title": "Stagg-Wasserkocher auswählen",
+        "description": "Stelle sicher, dass der Wasserkocher eingeschaltet und in der Nähe ist. {device_count} Wasserkocher über Bluetooth gefunden. Beim Auswählen wird die IP-Adresse automatisch gelesen.",
+        "data": {
+          "ble_address": "Bluetooth-Gerät"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
       "invalid_auth": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
-      "invalid_ip": "Ungültiges IP-Adress- oder Hostname-Format."
+      "invalid_ip": "Ungültiges IP-Adress- oder Hostname-Format.",
+      "no_bluetooth_devices": "Kein Stagg-Wasserkocher über Bluetooth gefunden. Stelle sicher, dass der Wasserkocher eingeschaltet ist und die Home-Assistant-Bluetooth-Integration funktioniert, oder gib die IP-Adresse manuell ein.",
+      "cannot_resolve_ip": "Der Wasserkocher wurde über Bluetooth gefunden, aber seine IP-Adresse konnte nicht ermittelt werden. Versuche es erneut oder gib die IP-Adresse manuell ein.",
+      "already_configured": "Dieser Wasserkocher ist bereits konfiguriert."
     },
     "abort": {
       "already_configured": "Gerät ist bereits konfiguriert."
@@ -24,12 +42,36 @@
     "step": {
       "init": {
         "title": "StaggAssistant Optionen",
-        "description": "Einstellungen der Integration anpassen.\n\n⚠️ **Hinweis zu erweiterten Entitäten:** Ab Firmware 1.2.26 blockiert Fellow das Auslesen von Geräteeinstellungen über WLAN. Erweiterte Schalter, Regler und Sensoren (Hold-Dauer, Chime-Lautstärke, Siedepunkt, Zeitplan, Höhenmeter) basieren auf lokalem Caching und Schätzungen und werden standardmäßig ausgeblendet, um 'Unbekannt'-Zustände und Desynchronisation zu vermeiden.",
+        "description": "Passe die Integration an, aktualisiere die IP-Adresse des Wasserkochers oder finde ihn über Bluetooth neu.",
+        "menu_options": {
+          "settings": "Allgemeine Einstellungen & IP-Adresse",
+          "bluetooth": "Wasserkocher über Bluetooth finden"
+        }
+      },
+      "settings": {
+        "title": "StaggAssistant Einstellungen",
+        "description": "Aktualisiere das Abfrageintervall, erweiterte Entitäten oder die IP-Adresse des Wasserkochers.\n\n⚠️ **Hinweis zu erweiterten Entitäten:** Ab Firmware 1.2.26 blockiert Fellow das Auslesen von Geräteeinstellungen über WLAN. Erweiterte Schalter, Regler und Sensoren (Hold-Dauer, Chime-Lautstärke, Siedepunkt, Zeitplan, Höhenmeter) basieren auf lokalem Caching und Schätzungen und werden standardmäßig ausgeblendet, um 'Unbekannt'-Zustände und Desynchronisation zu vermeiden.",
         "data": {
+          "ip_address": "IP-Adresse",
           "scan_interval": "Update-Intervall (Sekunden)",
           "enable_extended_entities": "Erweiterte Einstellungen & Sensoren aktivieren (Experten)"
         }
+      },
+      "bluetooth": {
+        "title": "Wasserkocher über Bluetooth finden",
+        "description": "Aktuelle IP-Adresse: {current_ip}\n\nStelle sicher, dass der Wasserkocher eingeschaltet und in der Nähe ist. {device_count} Wasserkocher über Bluetooth gefunden. Beim Auswählen wird die IP-Adresse automatisch aktualisiert.",
+        "data": {
+          "ble_address": "Bluetooth-Gerät"
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
+      "invalid_auth": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
+      "invalid_ip": "Ungültiges IP-Adress- oder Hostname-Format.",
+      "no_bluetooth_devices": "Kein Stagg-Wasserkocher über Bluetooth gefunden. Stelle sicher, dass der Wasserkocher eingeschaltet ist und die Home-Assistant-Bluetooth-Integration funktioniert, oder gib die IP-Adresse manuell ein.",
+      "cannot_resolve_ip": "Der Wasserkocher wurde über Bluetooth gefunden, aber seine IP-Adresse konnte nicht ermittelt werden. Versuche es erneut oder gib die IP-Adresse manuell ein.",
+      "already_configured": "Dieser Wasserkocher ist bereits konfiguriert."
     }
   },
   "entity": {

@@ -4,7 +4,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, get_device_identifier, get_stable_id
 from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,12 +28,12 @@ class StaggSwitch(CoordinatorEntity[StaggLinkCoordinator], SwitchEntity):
         """Initialize the switch."""
         super().__init__(coordinator)
         self._setting_name = setting_name
-        self._ip = entry.data["ip_address"]
-        device_id = f"stagglink_{self._ip.replace('.', '_')}"
+        self._ip = coordinator.ip
+        device_id = get_device_identifier(entry)
 
         self._attr_has_entity_name = True
         self._attr_translation_key = "pre_boil"
-        self._attr_unique_id = f"stagg_{self._ip.replace('.', '_')}_{setting_name}"
+        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{setting_name}"
         self._attr_icon = icon
 
         self._attr_device_info = DeviceInfo(

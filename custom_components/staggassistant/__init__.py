@@ -4,7 +4,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_DEVICE_ID,
     CONF_ENABLE_EXTENDED_ENTITIES,
+    CONF_IP_ADDRESS,
     CONF_SCAN_INTERVAL,
     CORE_PLATFORMS,
     DEFAULT_ENABLE_EXTENDED_ENTITIES,
@@ -16,14 +18,34 @@ from .const import (
 from .coordinator import StaggLinkCoordinator
 
 
+def _ensure_stable_id(hass: HomeAssistant, entry: ConfigEntry) -> str:
+    """Persist a stable entity identity for entries created before it existed."""
+    stable_id = entry.data.get(CONF_DEVICE_ID)
+    if stable_id:
+        return str(stable_id)
+
+    stable_id = str(entry.data[CONF_IP_ADDRESS]).replace(".", "_")
+    hass.config_entries.async_update_entry(
+        entry,
+        data={**entry.data, CONF_DEVICE_ID: stable_id},
+    )
+    return stable_id
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up StaggAssistant from a config entry."""
     interval = entry.options.get(
         CONF_SCAN_INTERVAL,
         entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
     )
+    stable_id = _ensure_stable_id(hass, entry)
 
-    coordinator = StaggLinkCoordinator(hass, entry.data["ip_address"], interval)
+    coordinator = StaggLinkCoordinator(
+        hass,
+        entry.data[CONF_IP_ADDRESS],
+        interval,
+        storage_key=stable_id,
+    )
     await coordinator.async_load_saved_settings()
     await coordinator.async_config_entry_first_refresh()
 
@@ -47,8 +69,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options updates."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Handle config entry updates."""
+    coordinator: StaggLinkCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        # The entry is currently reloading/unloading; the new setup will pick
+        # up the updated data and options.
+        return
+
+    # A changed IP address needs a fresh coordinator; reloading also rebuilds
+    # the entities against the new URL.
+    new_ip = entry.data.get(CONF_IP_ADDRESS)
+    if new_ip and new_ip != coordinator.ip:
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
 
     new_extended = entry.options.get(
         CONF_ENABLE_EXTENDED_ENTITIES,

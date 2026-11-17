@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, get_device_identifier, get_stable_id
 from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,9 +30,9 @@ class StaggKettleClimate(CoordinatorEntity[StaggLinkCoordinator], ClimateEntity)
     def __init__(self, coordinator: StaggLinkCoordinator, entry):
         """Initialize the climate entity."""
         super().__init__(coordinator)
-        self._ip = entry.data["ip_address"]
+        self._ip = coordinator.ip
         device_name = entry.data.get("name", "Stagg Kettle")
-        device_id = f"stagglink_{self._ip.replace('.', '_')}"
+        device_id = get_device_identifier(entry)
 
         # Primary entity of the device uses name = None with has_entity_name = True
         self._attr_has_entity_name = True

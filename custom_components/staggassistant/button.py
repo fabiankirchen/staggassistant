@@ -6,7 +6,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import DOMAIN, get_device_identifier, get_stable_id
 from .coordinator import StaggLinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,12 +36,12 @@ class StaggButton(CoordinatorEntity[StaggLinkCoordinator], ButtonEntity):
         """Initialize the button entity."""
         super().__init__(coordinator)
         self._key = key
-        self._ip = entry.data["ip_address"]
-        device_id = f"stagglink_{self._ip.replace('.', '_')}"
+        self._ip = coordinator.ip
+        device_id = get_device_identifier(entry)
 
         self._attr_has_entity_name = True
         self._attr_translation_key = key
-        self._attr_unique_id = f"stagg_{self._ip.replace('.', '_')}_{key}"
+        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{key}"
         self._attr_icon = icon
         self._command = command
 

@@ -104,7 +104,7 @@ async def _read_response_text(response, limit: int = 65536) -> str:
 class StaggLinkCoordinator(DataUpdateCoordinator):
     """Central instance to fetch data from and send commands to the kettle CLI API."""
 
-    def __init__(self, hass, ip, update_interval_seconds):
+    def __init__(self, hass, ip, update_interval_seconds, storage_key=None):
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -119,7 +119,12 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
         elevation = getattr(getattr(hass, "config", None), "elevation", 0) or 0
         self._cached_settings["altitude_meters"] = int(elevation)
         self._prtsettings_supported: bool | None = None
-        self._store = Store(hass, 1, f"staggassistant_{self.ip.replace('.', '_')}")
+        self._storage_key = storage_key or self.ip.replace(".", "_")
+        self._store = Store(hass, 1, f"staggassistant_{self._storage_key}")
+        self._legacy_store = None
+        legacy_key = self.ip.replace(".", "_")
+        if storage_key and storage_key != legacy_key:
+            self._legacy_store = Store(hass, 1, f"staggassistant_{legacy_key}")
         self._settings_loaded = False
 
     async def async_load_saved_settings(self) -> None:
@@ -128,6 +133,15 @@ class StaggLinkCoordinator(DataUpdateCoordinator):
         if self._store:
             try:
                 stored = await self._store.async_load()
+                if stored is None and self._legacy_store is not None:
+                    # Migrate settings written under the old IP-based key.
+                    stored = await self._legacy_store.async_load()
+                    if isinstance(stored, dict):
+                        await self._store.async_save(dict(stored))
+                        _LOGGER.debug(
+                            "Migrated cached settings for %s to stable storage key",
+                            self.ip,
+                        )
                 if isinstance(stored, dict):
                     self._cached_settings.update(stored)
                     if not self._cached_settings.get("altitude_meters") and elevation:
