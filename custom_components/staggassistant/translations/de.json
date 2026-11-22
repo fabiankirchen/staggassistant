@@ -31,7 +31,7 @@
       },
       "bluetooth_confirm": {
         "title": "Stagg-Wasserkocher Einrichtung bestätigen",
-        "description": "Wasserkocher '{name}' unter IP-Adresse {ip_address} gefunden. Klicken Sie auf Absenden, um die Einrichtung abzuschließen.",
+        "description": "Wasserkocher {name} unter IP-Adresse {ip_address} gefunden. Klicken Sie auf Absenden, um die Einrichtung abzuschließen.",
         "data": {
           "name": "Name",
           "scan_interval": "Update-Intervall (Sekunden)"
@@ -134,7 +134,7 @@
         "step": {
           "confirm": {
             "title": "IP-Adresse für {name} aktualisieren",
-            "description": "StaggAssistant konnte '{name}' unter {ip_address} über mehrere Abfragezyklen nicht erreichen. Gib die aktuelle IP-Adresse oder den Hostnamen ein, um die Verbindung wiederherzustellen.",
+            "description": "StaggAssistant konnte {name} unter {ip_address} über mehrere Abfragezyklen nicht erreichen. Gib die aktuelle IP-Adresse oder den Hostnamen ein, um die Verbindung wiederherzustellen.",
             "data": {
               "ip_address": "IP-Adresse"
             },
@@ -247,8 +247,8 @@
           "en": "Englisch",
           "fr": "Französisch",
           "es": "Spanisch",
-          "zh-Hans": "Chinesisch (vereinfacht)",
-          "zh-Hant": "Chinesisch (traditionell)",
+          "zh-hans": "Chinesisch (vereinfacht)",
+          "zh-hant": "Chinesisch (traditionell)",
           "ko": "Koreanisch",
           "ja": "Japanisch"
         }
@@ -256,8 +256,8 @@
       "units": {
         "name": "Temperatureinheit",
         "state": {
-          "C": "Celsius (°C)",
-          "F": "Fahrenheit (°F)"
+          "c": "Celsius (°C)",
+          "f": "Fahrenheit (°F)"
         }
       },
       "schedule_mode": {

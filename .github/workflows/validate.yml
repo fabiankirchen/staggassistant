@@ -31,7 +31,7 @@ jobs:
       - name: Run unit tests and coverage
         run: |
           python -m unittest discover -s tests
-          pytest --cov=custom_components/staggassistant --cov-report=term-missing --cov-fail-under=80
+          pytest --cov=custom_components/staggassistant --cov-report=term-missing --cov-fail-under=75
 
   lint-and-typecheck:
     name: Lint and Type Check

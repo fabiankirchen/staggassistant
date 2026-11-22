@@ -227,9 +227,9 @@ async def async_read_ble_identity(
 ) -> KettleNetworkInfo | None:
     """Connect to the kettle over BLE and read its network identity."""
     try:
-        from homeassistant.components import bluetooth
         from bleak import BleakClient
         from bleak_retry_connector import establish_connection
+        from homeassistant.components import bluetooth
     except ImportError:  # pragma: no cover - part of Home Assistant core
         return None
 

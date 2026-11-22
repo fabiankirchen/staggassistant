@@ -1,10 +1,10 @@
 """Mock minimal Home Assistant modules for standalone unit testing."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import IntFlag, StrEnum
 import sys
 import types
+from dataclasses import dataclass, field
+from enum import IntFlag, StrEnum
 from typing import Any
 from unittest.mock import MagicMock
 

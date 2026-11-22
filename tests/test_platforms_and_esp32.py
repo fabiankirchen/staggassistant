@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,7 +35,7 @@ from custom_components.staggassistant.const import (
 from custom_components.staggassistant.coordinator import StaggLinkCoordinator
 from custom_components.staggassistant.number import NUMBER_DESCRIPTIONS, StaggNumber
 from custom_components.staggassistant.select import SELECT_DESCRIPTIONS, StaggSelect
-from custom_components.staggassistant.sensor import SENSOR_DESCRIPTIONS, StaggSensor
+from custom_components.staggassistant.sensor import SENSOR_DESCRIPTIONS
 from custom_components.staggassistant.switch import SWITCH_DESCRIPTIONS, StaggSwitch
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -337,10 +336,15 @@ class TestPlatformsAndEsp32(unittest.IsolatedAsyncioTestCase):
                 resp_temp = _make_response(status=200, text=payload)
                 resp_settings = _make_response(status=200, text="<form action=\"cli\">")
 
-                def ok_side_effect(url: str, **kwargs: object) -> AsyncMock:
+                def ok_side_effect(
+                    url: str,
+                    _resp_temp: MagicMock = resp_temp,
+                    _resp_settings: MagicMock = resp_settings,
+                    **kwargs: object,
+                ) -> AsyncMock:
                     cm = AsyncMock()
                     cm.__aenter__.return_value = (
-                        resp_temp if "/temp" in url else resp_settings
+                        _resp_temp if "/temp" in url else _resp_settings
                     )
                     return cm
 

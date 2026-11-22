@@ -305,9 +305,14 @@ class TestValidateKettleEdgeCases(unittest.IsolatedAsyncioTestCase):
                 cm_cli = AsyncMock()
                 cm_cli.__aenter__.return_value = resp_cli
 
-                def side_effect(url: str, **kwargs: object) -> AsyncMock:
+                def side_effect(
+                    url: str,
+                    _cm_404: AsyncMock = cm_404,
+                    _cm_cli: AsyncMock = cm_cli,
+                    **kwargs: object,
+                ) -> AsyncMock:
                     self.assertIs(kwargs.get("allow_redirects"), False)
-                    return cm_404 if "/temp" in url else cm_cli
+                    return _cm_404 if "/temp" in url else _cm_cli
 
                 session = MagicMock()
                 session.get = MagicMock(side_effect=side_effect)

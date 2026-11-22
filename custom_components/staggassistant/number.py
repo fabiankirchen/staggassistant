@@ -1,9 +1,9 @@
 """Support for Fellow Stagg EKG Pro numbers."""
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
-import math
 from typing import Any, cast
 
 from homeassistant.components.number import (

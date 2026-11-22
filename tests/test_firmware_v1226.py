@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import tests  # noqa: F401 - installs Home Assistant test stubs
 
@@ -377,12 +377,19 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
                 cm_form = AsyncMock()
                 cm_form.__aenter__.return_value = resp_form
 
-                def side_effect(url, params=None, **kwargs):
+                def side_effect(
+                    url,
+                    params=None,
+                    _cm_404=cm_404,
+                    _cm_state=cm_state,
+                    _cm_form=cm_form,
+                    **kwargs,
+                ):
                     if "/temp" in url:
-                        return cm_404
+                        return _cm_404
                     if "cmd=state" in url or (params and params.get("cmd") == "state"):
-                        return cm_state
-                    return cm_form
+                        return _cm_state
+                    return _cm_form
 
                 self.coordinator.session.get = MagicMock(side_effect=side_effect)
                 data = await self.coordinator._async_update_data()

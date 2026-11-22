@@ -31,7 +31,7 @@
       },
       "bluetooth_confirm": {
         "title": "Confirm Stagg kettle setup",
-        "description": "Found kettle '{name}' at IP address {ip_address}. Click submit to complete setup.",
+        "description": "Found kettle {name} at IP address {ip_address}. Click submit to complete setup.",
         "data": {
           "name": "Name",
           "scan_interval": "Update Interval (Seconds)"
@@ -134,7 +134,7 @@
         "step": {
           "confirm": {
             "title": "Update kettle IP address for {name}",
-            "description": "StaggAssistant could not reach '{name}' at {ip_address} for several polling cycles. Enter its current IP address or hostname to restore the connection.",
+            "description": "StaggAssistant could not reach {name} at {ip_address} for several polling cycles. Enter its current IP address or hostname to restore the connection.",
             "data": {
               "ip_address": "IP Address"
             },
@@ -247,8 +247,8 @@
           "en": "English",
           "fr": "French",
           "es": "Spanish",
-          "zh-Hans": "Chinese (Simplified)",
-          "zh-Hant": "Chinese (Traditional)",
+          "zh-hans": "Chinese (Simplified)",
+          "zh-hant": "Chinese (Traditional)",
           "ko": "Korean",
           "ja": "Japanese"
         }
@@ -256,8 +256,8 @@
       "units": {
         "name": "Temperature units",
         "state": {
-          "C": "Celsius (°C)",
-          "F": "Fahrenheit (°F)"
+          "c": "Celsius (°C)",
+          "f": "Fahrenheit (°F)"
         }
       },
       "schedule_mode": {

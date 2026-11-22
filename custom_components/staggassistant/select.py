@@ -29,14 +29,14 @@ _CLOCK_MODE_COMMANDS: dict[str, list[str]] = {
     "analog": ["setanalog"],
 }
 
-_LANGUAGE_OPTIONS: list[str] = ["en", "fr", "es", "zh-Hans", "zh-Hant", "ko", "ja"]
+_LANGUAGE_OPTIONS: list[str] = ["en", "fr", "es", "zh-hans", "zh-hant", "ko", "ja"]
 _LANGUAGE_INDEX: dict[str, int] = {
     option: idx for idx, option in enumerate(_LANGUAGE_OPTIONS)
 }
 
 _UNITS_COMMANDS: dict[str, list[str]] = {
-    "C": ["setunitsc"],
-    "F": ["setunitsf"],
+    "c": ["setunitsc"],
+    "f": ["setunitsf"],
 }
 
 _SCHEDULE_MODE_COMMANDS: dict[str, list[str]] = {
@@ -73,7 +73,7 @@ SELECT_DESCRIPTIONS: tuple[StaggSelectEntityDescription, ...] = (
     StaggSelectEntityDescription(
         key="units",
         translation_key="units",
-        options=["C", "F"],
+        options=["c", "f"],
         entity_category=EntityCategory.CONFIG,
         entity_registry_enabled_default=False,
         command_fn=lambda val: _UNITS_COMMANDS[val],
@@ -147,6 +147,11 @@ class StaggSelect(StaggEntity, SelectEntity):
                 return None
             if 0 <= idx < len(self.options):
                 return self.options[idx]
+            return None
+
+        if key == "units":
+            if isinstance(val, str) and val.lower() in self.options:
+                return val.lower()
             return None
 
         if isinstance(val, str) and val in self.options:

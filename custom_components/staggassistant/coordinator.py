@@ -1,9 +1,9 @@
 """DataUpdateCoordinator for Fellow Stagg EKG Pro integration."""
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
 import re
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from homeassistant.config_entries import ConfigEntry
