@@ -119,7 +119,7 @@ def _unique_id_for_update(
     return fallback
 
 
-class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class StaggAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for StaggAssistant."""
 
     VERSION = 1
