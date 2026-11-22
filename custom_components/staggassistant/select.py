@@ -1,139 +1,169 @@
 """Support for Fellow Stagg EKG Pro selects."""
-import logging
-from homeassistant.components.select import SelectEntity
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from __future__ import annotations
 
-from .const import DOMAIN, get_device_identifier, get_stable_id
-from .coordinator import StaggLinkCoordinator
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, cast
 
-_LOGGER = logging.getLogger(__name__)
+from homeassistant.components.select import SelectEntity, SelectEntityDescription
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import DOMAIN, get_stable_id
+from .coordinator import StaggConfigEntry, StaggLinkCoordinator
+from .entity import StaggEntity
+
+PARALLEL_UPDATES = 1
+
+_CLOCK_MODE_FROM_INT: dict[int, str] = {
+    0: "off",
+    1: "digital",
+    2: "analog",
+}
+
+_CLOCK_MODE_COMMANDS: dict[str, list[str]] = {
+    "off": ["setsetting clockmode 0"],
+    "digital": ["setdigital"],
+    "analog": ["setanalog"],
+}
+
+_LANGUAGE_OPTIONS: list[str] = ["en", "fr", "es", "zh-Hans", "zh-Hant", "ko", "ja"]
+_LANGUAGE_INDEX: dict[str, int] = {
+    option: idx for idx, option in enumerate(_LANGUAGE_OPTIONS)
+}
+
+_UNITS_COMMANDS: dict[str, list[str]] = {
+    "C": ["setunitsc"],
+    "F": ["setunitsf"],
+}
+
+_SCHEDULE_MODE_COMMANDS: dict[str, list[str]] = {
+    "off": ["setsetting schedon 0"],
+    "once": ["setsetting schedon 1", "setsetting Repeat_sched 0"],
+    "repeat": ["setsetting schedon 1", "setsetting Repeat_sched 1"],
+}
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+@dataclass(frozen=True, kw_only=True)
+class StaggSelectEntityDescription(SelectEntityDescription):
+    """Describes a Stagg select entity."""
+
+    command_fn: Callable[[str], list[str]]
+
+
+SELECT_DESCRIPTIONS: tuple[StaggSelectEntityDescription, ...] = (
+    StaggSelectEntityDescription(
+        key="clock_mode",
+        translation_key="clock_mode",
+        options=["off", "digital", "analog"],
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        command_fn=lambda val: _CLOCK_MODE_COMMANDS[val],
+    ),
+    StaggSelectEntityDescription(
+        key="language",
+        translation_key="language",
+        options=list(_LANGUAGE_OPTIONS),
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        command_fn=lambda val: [f"setsetting language {_LANGUAGE_INDEX[val]}"],
+    ),
+    StaggSelectEntityDescription(
+        key="units",
+        translation_key="units",
+        options=["C", "F"],
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        command_fn=lambda val: _UNITS_COMMANDS[val],
+    ),
+    StaggSelectEntityDescription(
+        key="schedule_mode",
+        translation_key="schedule_mode",
+        options=["off", "once", "repeat"],
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        command_fn=lambda val: _SCHEDULE_MODE_COMMANDS[val],
+    ),
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: StaggConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up StaggLink selects from a config entry."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    selects = [
-        StaggSelect(
-            coordinator,
-            entry,
-            "clock_mode",
-            "Clock Style",
-            ["off", "digital", "analog"],
-            "mdi:clock-edit-outline",
-            lambda val: "setsetting clockmode 0" if val == "off" else ("setdigital" if val == "digital" else "setanalog"),
-        ),
-        StaggSelect(
-            coordinator,
-            entry,
-            "language",
-            "Language Selection",
-            ["en", "fr", "es", "zh-Hans", "zh-Hant", "ko", "ja"],
-            "mdi:translate",
-            lambda val: f"setsetting language {['en', 'fr', 'es', 'zh-Hans', 'zh-Hant', 'ko', 'ja'].index(val)}",
-        ),
-        StaggSelect(
-            coordinator,
-            entry,
-            "units",
-            "Temperature Units",
-            ["C", "F"],
-            "mdi:thermometer",
-            lambda val: "setunitsc" if val == "C" else "setunitsf",
-        ),
-        StaggSelect(
-            coordinator,
-            entry,
-            "schedule_mode",
-            "Schedule Mode",
-            ["off", "once", "repeat"],
-            "mdi:calendar-clock",
-            lambda val: (
-                ["setsetting schedon 0"]
-                if val == "off"
-                else ["setsetting schedon 1", "setsetting Repeat_sched 0"]
-                if val == "once"
-                else ["setsetting schedon 1", "setsetting Repeat_sched 1"]
-            ),
-        ),
+    coordinator = entry.runtime_data
+    entities = [
+        StaggSelect(coordinator, entry, description)
+        for description in SELECT_DESCRIPTIONS
     ]
+    async_add_entities(entities)
 
-    async_add_entities(selects, True)
 
-
-class StaggSelect(CoordinatorEntity[StaggLinkCoordinator], SelectEntity):
+class StaggSelect(StaggEntity, SelectEntity):
     """Representation of a Stagg EKG Pro select configuration."""
+
+    entity_description: StaggSelectEntityDescription
 
     def __init__(
         self,
         coordinator: StaggLinkCoordinator,
-        entry,
-        key: str,
-        name_suffix: str,
-        options: list[str],
-        icon: str,
-        command_generator,
-    ):
+        entry: StaggConfigEntry,
+        description: StaggSelectEntityDescription,
+    ) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
-        self._key = key
-        self._ip = coordinator.ip
-        device_id = get_device_identifier(entry)
-
-        self._attr_has_entity_name = True
-        self._attr_translation_key = key
-        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{key}"
-        self._attr_options = options
-        self._attr_icon = icon
-        self._command_generator = command_generator
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.data.get("name", "Stagg Kettle"),
-            manufacturer="Fellow",
-            model="Stagg EKG Pro",
-            configuration_url=f"http://{self._ip}",
-        )
+        super().__init__(coordinator, entry)
+        self.entity_description = description
+        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{description.key}"
 
     @property
     def current_option(self) -> str | None:
-        """Return the current selected option."""
+        """Return the current selected option, or None when unknown."""
         if not self.coordinator.data:
             return None
-        val = self.coordinator.data.get(self._key)
 
-        if self._key == "clock_mode":
+        key = self.entity_description.key
+        val = cast("dict[str, Any]", self.coordinator.data).get(key)
+        if val is None:
+            return None
+
+        if key == "clock_mode":
+            if isinstance(val, bool):
+                return None
+            try:
+                return _CLOCK_MODE_FROM_INT.get(int(val))
+            except (ValueError, TypeError):
+                return None
+
+        if key == "language":
+            if isinstance(val, bool):
+                return None
             try:
                 idx = int(val)
-                if idx == 0:
-                    return "off"
-                if idx == 1:
-                    return "digital"
-                return "analog"
             except (ValueError, TypeError):
-                return "off"
+                return None
+            if 0 <= idx < len(self.options):
+                return self.options[idx]
+            return None
 
-        if self._key == "language":
-            try:
-                idx = int(val)
-                if 0 <= idx < len(self._attr_options):
-                    return self._attr_options[idx]
-            except (ValueError, TypeError):
-                pass
-
-        if val in self._attr_options:
+        if isinstance(val, str) and val in self.options:
             return val
 
-        return self._attr_options[0]
+        return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        raw_cmds = self._command_generator(option)
-        if isinstance(raw_cmds, str):
-            raw_cmds = [raw_cmds]
+        if option not in self.options:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_option",
+                translation_placeholders={"option": option},
+            )
 
-        for cmd in raw_cmds:
+        for cmd in self.entity_description.command_fn(option):
             await self.coordinator.async_send_command(cmd)
 
         await self.coordinator.async_request_refresh()

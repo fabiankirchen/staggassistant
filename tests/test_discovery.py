@@ -1,6 +1,8 @@
-"""Tests for BLE/ARP discovery and config-entry identity handling."""
+"""Tests for BLE/ARP discovery, reconfiguration, and config-entry identity handling."""
+from __future__ import annotations
+
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import tests  # noqa: F401 - installs Home Assistant test stubs
 
@@ -15,7 +17,6 @@ from custom_components.staggassistant.const import (
     CONF_IP_ADDRESS,
     CONF_SCAN_INTERVAL,
     CONF_WIFI_MAC,
-    DOMAIN,
     get_device_identifier,
     get_stable_id,
 )
@@ -33,7 +34,7 @@ from custom_components.staggassistant.kettle_discovery import (
 class TestKettleDiscoveryHelpers(unittest.TestCase):
     """Test pure discovery helpers."""
 
-    def test_parse_status_record(self):
+    def test_parse_status_record(self) -> None:
         """The c4b4 record carries IP, counter, SSID and status."""
         raw = bytes.fromhex(
             "c000020a7100"
@@ -47,11 +48,11 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         self.assertEqual(parsed["ssid"], "TestNetwork")
         self.assertEqual(parsed["status"], 0x22)
 
-    def test_parse_status_record_ignores_unconnected_ip(self):
+    def test_parse_status_record_ignores_unconnected_ip(self) -> None:
         """0.0.0.0 is not a usable IP address."""
         self.assertNotIn("ip", parse_status_record(b"\x00\x00\x00\x00"))
 
-    def test_name_suffix_and_candidates(self):
+    def test_name_suffix_and_candidates(self) -> None:
         """The BLE name suffix maps to the Wi-Fi MAC of the same kettle."""
         self.assertEqual(name_suffix("EKG-aa-bb-cc"), "aa:bb:cc")
         self.assertEqual(normalize_mac("02-00-00-AA-BB-CC"), "02:00:00:aa:bb:cc")
@@ -59,7 +60,7 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         self.assertIn("02:00:00:aa:bb:cc", candidates)
         self.assertIn("aa:bb:cc", candidates)
 
-    def test_host_validation(self):
+    def test_host_validation(self) -> None:
         """Reject IPv6, URLs, injection attempts and malformed hostnames."""
         self.assertTrue(is_valid_host("192.0.2.10"))
         self.assertTrue(is_valid_host("kettle.local"))
@@ -67,7 +68,7 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
             with self.subTest(host=host):
                 self.assertFalse(is_valid_host(host))
 
-    def test_stable_identity_helpers(self):
+    def test_stable_identity_helpers(self) -> None:
         """Entity identity stays IP-derived for old entries and MAC-based for new ones."""
         old = MagicMock()
         old.data = {CONF_IP_ADDRESS: "192.0.2.10"}
@@ -78,7 +79,7 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         new.data = {CONF_DEVICE_ID: "02_00_00_aa_bb_cc"}
         self.assertEqual(get_device_identifier(new), "stagglink_02_00_00_aa_bb_cc")
 
-    def test_old_entry_gets_persisted_stable_id(self):
+    def test_old_entry_gets_persisted_stable_id(self) -> None:
         """An update from an older version persists the old IP-derived identity."""
         hass = MagicMock()
         entry = MagicMock()
@@ -90,7 +91,7 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         kwargs = hass.config_entries.async_update_entry.call_args.kwargs
         self.assertEqual(kwargs["data"][CONF_DEVICE_ID], "192_0_2_10")
 
-    def test_entry_with_stable_id_is_not_rewritten(self):
+    def test_entry_with_stable_id_is_not_rewritten(self) -> None:
         """A stored stable id survives later IP changes."""
         hass = MagicMock()
         entry = MagicMock()
@@ -102,7 +103,7 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         self.assertEqual(_ensure_stable_id(hass, entry), "02_00_00_aa_bb_cc")
         hass.config_entries.async_update_entry.assert_not_called()
 
-    def test_arp_matching_supports_suffix_and_prefers_exact_mac(self):
+    def test_arp_matching_supports_suffix_and_prefers_exact_mac(self) -> None:
         """Full 6-octet MAC matches come before 3-octet BLE name suffix matches."""
         candidates = _mac_candidates("EKG-aa-bb-cc", "02:00:00:00:00:0E")
         arp_table = {
@@ -116,7 +117,9 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
         )
 
         # Even without a MAC-shaped BLE address (e.g. CoreBluetooth UUID), suffix matches work.
-        uuid_candidates = _mac_candidates("EKG-aa-bb-cc", "F0E1D2C3-B4A5-6789-0123-456789ABCDEF")
+        uuid_candidates = _mac_candidates(
+            "EKG-aa-bb-cc", "F0E1D2C3-B4A5-6789-0123-456789ABCDEF"
+        )
         self.assertEqual(
             _match_arp_table({"192.0.2.20": "70:b8:f6:aa:bb:cc"}, uuid_candidates),
             ["192.0.2.20"],
@@ -124,20 +127,29 @@ class TestKettleDiscoveryHelpers(unittest.TestCase):
 
 
 class TestConfigFlowBluetooth(unittest.IsolatedAsyncioTestCase):
-    """Test the Bluetooth branch of the config flow."""
+    """Test the Bluetooth scan branch of the config flow."""
 
-    async def test_setup_menu_offers_bluetooth_and_manual(self):
+    async def test_setup_menu_offers_bluetooth_scan_and_manual(self) -> None:
         """The initial setup step is a menu of discovery methods."""
         flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
         result = await flow.async_step_user()
         self.assertEqual(result["type"], "menu")
-        self.assertEqual(result["menu_options"], ["bluetooth", "manual"])
+        self.assertEqual(result["menu_options"], ["bluetooth_scan", "manual"])
 
-    async def test_bluetooth_discovery_creates_entry(self):
+    async def test_manual_rejects_invalid_host(self) -> None:
+        """Manual setup reports invalid_host for malformed IP/hostname."""
+        flow = StaggAssistantConfigFlow()
+        flow.hass = MagicMock()
+        result = await flow.async_step_manual({CONF_IP_ADDRESS: "192.168.1.1/evil"})
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"], {CONF_IP_ADDRESS: "invalid_host"})
+
+    async def test_bluetooth_scan_discovery_creates_entry(self) -> None:
         """Selecting a discovered kettle fills IP, MAC and stable ID."""
         flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
+        flow.hass.config_entries.async_entries.return_value = []
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = MagicMock()
 
@@ -148,15 +160,15 @@ class TestConfigFlowBluetooth(unittest.IsolatedAsyncioTestCase):
             name="EKG-aa-bb-cc",
             method="bluetooth",
         )
-        with unittest.mock.patch(
+        with patch(
             "custom_components.staggassistant.config_flow.async_get_kettle_ble_device_map",
             AsyncMock(return_value={"02:00:00:00:00:0E": "EKG-aa-bb-cc"}),
-        ), unittest.mock.patch(
+        ), patch(
             "custom_components.staggassistant.config_flow.async_resolve_kettle",
             AsyncMock(return_value=resolved),
         ):
-            result = await flow.async_step_bluetooth(
-                {"ble_address": "02:00:00:00:00:0E"}
+            result = await flow.async_step_bluetooth_scan(
+                {CONF_BLE_ADDRESS: "02:00:00:00:00:0E"}
             )
 
         self.assertEqual(result["type"], "create_entry")
@@ -165,22 +177,24 @@ class TestConfigFlowBluetooth(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"][CONF_DEVICE_ID], "02_00_00_aa_bb_cc")
         self.assertEqual(result["title"], "EKG-aa-bb-cc")
 
-    async def test_bluetooth_keeps_devices_on_resolve_error_and_allows_rescan(self):
+    async def test_bluetooth_scan_keeps_devices_on_resolve_error_and_allows_rescan(
+        self,
+    ) -> None:
         """Errors keep discovered devices selectable, and empty submit rescans."""
         flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
 
-        with unittest.mock.patch(
+        with patch(
             "custom_components.staggassistant.config_flow.async_get_kettle_ble_device_map",
             AsyncMock(return_value={"02:00:00:00:00:0E": "EKG-aa-bb-cc"}),
-        ) as device_map, unittest.mock.patch(
+        ) as device_map, patch(
             "custom_components.staggassistant.config_flow.async_resolve_kettle",
             AsyncMock(return_value=None),
         ):
-            error_res = await flow.async_step_bluetooth(
+            error_res = await flow.async_step_bluetooth_scan(
                 {CONF_BLE_ADDRESS: "02:00:00:00:00:0E"}
             )
-            rescan_res = await flow.async_step_bluetooth({CONF_BLE_ADDRESS: ""})
+            rescan_res = await flow.async_step_bluetooth_scan({CONF_BLE_ADDRESS: ""})
 
         self.assertEqual(error_res["errors"], {"base": "cannot_resolve_ip"})
         self.assertEqual(error_res["description_placeholders"]["device_count"], "1")
@@ -191,9 +205,9 @@ class TestConfigFlowBluetooth(unittest.IsolatedAsyncioTestCase):
 
 
 class TestOptionsFlowIpUpdate(unittest.IsolatedAsyncioTestCase):
-    """Test changing the IP address through the options flow."""
+    """Test reconfiguration IP updates and simplified options flow."""
 
-    def _entry(self):
+    def _entry(self) -> MagicMock:
         entry = MagicMock()
         entry.entry_id = "entry-1"
         entry.unique_id = "192.0.2.9"
@@ -205,93 +219,40 @@ class TestOptionsFlowIpUpdate(unittest.IsolatedAsyncioTestCase):
         entry.options = {}
         return entry
 
-    async def test_manual_ip_update_keeps_entity_identity(self):
-        """Updating the IP updates entry data/unique id but not the stable entity ID."""
+    async def test_reconfigure_manual_ip_update_keeps_entity_identity(self) -> None:
+        """Updating IP via reconfigure updates entry data/unique_id and preserves CONF_DEVICE_ID."""
         entry = self._entry()
-        flow = StaggAssistantOptionsFlow()
-        flow.config_entry = entry
+        flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
-        flow.hass.data = {DOMAIN: {entry.entry_id: MagicMock()}}
-        flow.hass.config_entries.async_entries.return_value = []
+        flow.hass.config_entries.async_entries.return_value = [entry]
+        flow._reconfigure_entry = entry
 
-        with unittest.mock.patch(
+        with patch(
             "custom_components.staggassistant.config_flow.async_validate_kettle",
             AsyncMock(return_value=None),
         ):
-            result = await flow.async_step_settings(
-                {
-                    CONF_IP_ADDRESS: "192.0.2.10",
-                    CONF_SCAN_INTERVAL: 30,
-                    "enable_extended_entities": True,
-                }
+            result = await flow.async_step_reconfigure_manual(
+                {CONF_IP_ADDRESS: "192.0.2.10"}
             )
 
-        self.assertEqual(result["type"], "create_entry")
-        self.assertEqual(result["data"][CONF_SCAN_INTERVAL], 30)
+        self.assertEqual(result["type"], "abort")
+        self.assertEqual(result["reason"], "reconfigure_successful")
         flow.hass.config_entries.async_update_entry.assert_called_once()
-        flow.hass.config_entries.async_schedule_reload.assert_not_called()
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
+            entry.entry_id
+        )
         kwargs = flow.hass.config_entries.async_update_entry.call_args.kwargs
         self.assertEqual(kwargs["data"][CONF_IP_ADDRESS], "192.0.2.10")
         self.assertEqual(kwargs["data"][CONF_DEVICE_ID], "192_0_2_9")
         self.assertEqual(kwargs["unique_id"], "192.0.2.10")
 
-    async def test_manual_ip_update_schedules_reload_when_unloaded(self):
-        """Entries stuck in SETUP_RETRY reload immediately when IP changes."""
+    async def test_reconfigure_bluetooth_update_sets_mac_and_ip(self) -> None:
+        """The reconfigure Bluetooth branch stores resolved IP, MAC and preserves CONF_DEVICE_ID."""
         entry = self._entry()
-        flow = StaggAssistantOptionsFlow()
-        flow.config_entry = entry
+        flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
-        flow.hass.data = {DOMAIN: {}}
-        flow.hass.config_entries.async_entries.return_value = []
-
-        with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_validate_kettle",
-            AsyncMock(return_value=None),
-        ):
-            result = await flow.async_step_settings(
-                {
-                    CONF_IP_ADDRESS: "192.0.2.10",
-                    CONF_SCAN_INTERVAL: 30,
-                    "enable_extended_entities": False,
-                }
-            )
-
-        self.assertEqual(result["type"], "create_entry")
-        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
-
-    async def test_settings_only_update_does_not_require_online_kettle(self):
-        """Changing only the interval should not validate/contact the kettle."""
-        entry = self._entry()
-        flow = StaggAssistantOptionsFlow()
-        flow.config_entry = entry
-        flow.hass = MagicMock()
-        flow.hass.config_entries.async_entries.return_value = []
-
-        with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_validate_kettle",
-            AsyncMock(return_value="cannot_connect"),
-        ) as validate:
-            result = await flow.async_step_settings(
-                {
-                    CONF_IP_ADDRESS: "192.0.2.9",
-                    CONF_SCAN_INTERVAL: 45,
-                    "enable_extended_entities": True,
-                }
-            )
-
-        self.assertEqual(result["type"], "create_entry")
-        self.assertEqual(result["data"][CONF_SCAN_INTERVAL], 45)
-        validate.assert_not_called()
-        flow.hass.config_entries.async_update_entry.assert_not_called()
-
-    async def test_bluetooth_update_sets_mac_and_ip(self):
-        """The Bluetooth branch stores the resolved IP and Wi-Fi MAC."""
-        entry = self._entry()
-        flow = StaggAssistantOptionsFlow()
-        flow.config_entry = entry
-        flow.hass = MagicMock()
-        flow.hass.data = {DOMAIN: {}}
-        flow.hass.config_entries.async_entries.return_value = []
+        flow.hass.config_entries.async_entries.return_value = [entry]
+        flow._reconfigure_entry = entry
 
         resolved = KettleNetworkInfo(
             ip="192.0.2.10",
@@ -299,44 +260,70 @@ class TestOptionsFlowIpUpdate(unittest.IsolatedAsyncioTestCase):
             ble_address="02:00:00:00:00:0E",
             method="bluetooth",
         )
-        with unittest.mock.patch(
+        with patch(
             "custom_components.staggassistant.config_flow.async_get_kettle_ble_device_map",
             AsyncMock(return_value={"02:00:00:00:00:0E": "EKG-aa-bb-cc"}),
-        ), unittest.mock.patch(
+        ), patch(
             "custom_components.staggassistant.config_flow.async_resolve_kettle",
             AsyncMock(return_value=resolved),
         ):
-            result = await flow.async_step_bluetooth(
-                {"ble_address": "02:00:00:00:00:0E"}
+            result = await flow.async_step_reconfigure_bluetooth(
+                {CONF_BLE_ADDRESS: "02:00:00:00:00:0E"}
             )
 
-        self.assertEqual(result["type"], "create_entry")
-        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+        self.assertEqual(result["type"], "abort")
+        self.assertEqual(result["reason"], "reconfigure_successful")
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
+            entry.entry_id
+        )
         kwargs = flow.hass.config_entries.async_update_entry.call_args.kwargs
         self.assertEqual(kwargs["data"][CONF_IP_ADDRESS], "192.0.2.10")
         self.assertEqual(kwargs["data"][CONF_WIFI_MAC], "02:00:00:aa:bb:cc")
+        self.assertEqual(kwargs["data"][CONF_DEVICE_ID], "192_0_2_9")
         self.assertEqual(kwargs["unique_id"], "02:00:00:aa:bb:cc")
 
-    async def test_options_bluetooth_keeps_devices_on_error(self):
-        """Options BLE flow keeps discovered devices when resolution fails."""
+    async def test_reconfigure_bluetooth_keeps_devices_on_error(self) -> None:
+        """Reconfigure BLE flow keeps discovered devices when resolution fails."""
         entry = self._entry()
-        flow = StaggAssistantOptionsFlow()
-        flow.config_entry = entry
+        flow = StaggAssistantConfigFlow()
         flow.hass = MagicMock()
+        flow._reconfigure_entry = entry
 
-        with unittest.mock.patch(
+        with patch(
             "custom_components.staggassistant.config_flow.async_get_kettle_ble_device_map",
             AsyncMock(return_value={"02:00:00:00:00:0E": "EKG-aa-bb-cc"}),
-        ), unittest.mock.patch(
+        ), patch(
             "custom_components.staggassistant.config_flow.async_resolve_kettle",
             AsyncMock(return_value=None),
         ):
-            error_res = await flow.async_step_bluetooth(
+            error_res = await flow.async_step_reconfigure_bluetooth(
                 {CONF_BLE_ADDRESS: "02:00:00:00:00:0E"}
             )
 
         self.assertEqual(error_res["errors"], {"base": "cannot_resolve_ip"})
         self.assertEqual(error_res["description_placeholders"]["device_count"], "1")
+
+    async def test_options_flow_only_updates_scan_interval(self) -> None:
+        """OptionsFlow only manages scan_interval and does not mutate entry.data."""
+        entry = self._entry()
+        flow = StaggAssistantOptionsFlow()
+        flow.config_entry = entry
+        flow.hass = MagicMock()
+
+        form_res = await flow.async_step_init()
+        self.assertEqual(form_res["type"], "form")
+        self.assertEqual(form_res["step_id"], "init")
+
+        with patch(
+            "custom_components.staggassistant.config_flow.async_validate_kettle",
+            AsyncMock(return_value="cannot_connect"),
+        ) as validate:
+            result = await flow.async_step_init({CONF_SCAN_INTERVAL: 45})
+
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"], {CONF_SCAN_INTERVAL: 45})
+        validate.assert_not_called()
+        flow.hass.config_entries.async_update_entry.assert_not_called()
 
 
 if __name__ == "__main__":

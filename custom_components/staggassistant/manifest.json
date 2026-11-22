@@ -2,11 +2,15 @@
   "domain": "staggassistant",
   "name": "StaggAssistant",
   "after_dependencies": ["bluetooth", "network"],
+  "bluetooth": [
+    {"local_name": "EKG-*"},
+    {"service_uuid": "2291c4b5-5d7f-4477-a88b-b266edb97142"}
+  ],
   "codeowners": ["@fabiankirchen"],
   "config_flow": true,
   "documentation": "https://github.com/fabiankirchen/staggassistant",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/fabiankirchen/staggassistant/issues",
   "requirements": [],
-  "version": "0.4.0-beta.1"
+  "version": "0.4.0-beta.2"
 }

@@ -1,28 +1,11 @@
 """Comprehensive unit tests for Firmware 1.2.26+ features and security hardening."""
-import sys
-from unittest.mock import AsyncMock, MagicMock
+from __future__ import annotations
+
+import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import tests  # noqa: F401 - installs Home Assistant test stubs
 
-# Provide concrete classes for entity bases to avoid MagicMock metaclass conflict
-class MockCoordinatorEntity:
-    def __init__(self, coordinator=None):
-        self.coordinator = coordinator
-
-    def __class_getitem__(cls, item):
-        return cls
-
-class MockClimateEntity:
-    pass
-
-class MockNumberEntity:
-    pass
-
-sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
-sys.modules["homeassistant.components.climate"].ClimateEntity = MockClimateEntity
-sys.modules["homeassistant.components.number"].NumberEntity = MockNumberEntity
-
-import unittest
 from custom_components.staggassistant.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
     StaggBinarySensor,
@@ -37,14 +20,19 @@ from custom_components.staggassistant.coordinator import (
     StaggLinkCoordinator,
     _parse_float,
 )
-from custom_components.staggassistant.number import StaggNumber
+from custom_components.staggassistant.number import NUMBER_DESCRIPTIONS, StaggNumber
 from custom_components.staggassistant.sensor import (
     SENSOR_DESCRIPTIONS,
     StaggSensor,
 )
 from homeassistant.components.climate.const import HVACAction, HVACMode
-from homeassistant.components.number import NumberDeviceClass
-from homeassistant.const import UnitOfLength, UnitOfTemperature, UnitOfTime
+from homeassistant.components.number import NumberDeviceClass, NumberMode
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfLength,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -81,7 +69,7 @@ class TestFirmware1226AndHardening(unittest.IsolatedAsyncioTestCase):
         cm_settings = AsyncMock()
         cm_settings.__aenter__.return_value = resp_settings
 
-        def side_effect(url, params=None):
+        def side_effect(url, params=None, **kwargs):
             if "/temp" in url:
                 return cm_temp
             return cm_settings
@@ -182,7 +170,7 @@ class TestFirmware1226AndHardening(unittest.IsolatedAsyncioTestCase):
         cm_form = AsyncMock()
         cm_form.__aenter__.return_value = resp_form
 
-        def side_effect(url, params=None):
+        def side_effect(url, params=None, **kwargs):
             if "/temp" in url:
                 return cm_temp
             if "cmd=prtsettings" in url:
@@ -289,9 +277,9 @@ class TestFirmware1226AndHardening(unittest.IsolatedAsyncioTestCase):
         self.assertIn("setsettingd settempr 185", sent_commands)
         self.assertNotIn("ss S_Heat", sent_commands)
 
-        # 2. When kettle is already heating: setting target temperature SHOULD send ss S_Heat
+        # 2. When kettle is already heating and docked with water: setting target temperature SHOULD send ss S_Heat
         sent_commands.clear()
-        self.coordinator.data = {"mode": "S_Heat"}
+        self.coordinator.data = {"mode": "S_Heat", "is_docked": True, "no_water": False}
         await climate.async_set_temperature(temperature=90.0)
 
         # 90 C = 194 F
@@ -339,7 +327,7 @@ st: schtempr = 180 F (82 C)
         cm_settings = AsyncMock()
         cm_settings.__aenter__.return_value = resp_settings
 
-        def side_effect(url, params=None):
+        def side_effect(url, params=None, **kwargs):
             if "/temp" in url:
                 return cm_404
             if "cmd=state" in url or (params and params.get("cmd") == "state"):
@@ -389,7 +377,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
                 cm_form = AsyncMock()
                 cm_form.__aenter__.return_value = resp_form
 
-                def side_effect(url, params=None):
+                def side_effect(url, params=None, **kwargs):
                     if "/temp" in url:
                         return cm_404
                     if "cmd=state" in url or (params and params.get("cmd") == "state"):
@@ -416,7 +404,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         cm_form = AsyncMock()
         cm_form.__aenter__.return_value = resp_form
 
-        def side_effect(url, params=None):
+        def side_effect(url, params=None, **kwargs):
             if "/temp" in url:
                 return cm_404
             return cm_form
@@ -489,108 +477,136 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
 
     # 11. Number entity configuration verification
     def test_number_entities_configuration(self):
-        """Verify number entities use UnitOfTime.MINUTES, UnitOfLength.METERS, and NumberDeviceClass.TEMPERATURE."""
+        """Verify number entities use NUMBER_DESCRIPTIONS with proper units, device classes, modes, and categories."""
         entry = MagicMock()
         entry.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
+        by_key = {desc.key: desc for desc in NUMBER_DESCRIPTIONS}
 
         # hold_time_minutes
-        num_hold = StaggNumber(
-            self.coordinator,
-            entry,
-            "hold_time_minutes",
-            "Hold Time Duration",
-            0,
-            60,
-            1,
-            UnitOfTime.MINUTES,
-            "mdi:timer-sand",
-            lambda val: f"setsetting hold {int(val)}",
+        num_hold = StaggNumber(self.coordinator, entry, by_key["hold_time_minutes"])
+        self.assertEqual(
+            num_hold.entity_description.native_unit_of_measurement, UnitOfTime.MINUTES
         )
-        self.assertEqual(num_hold._attr_native_unit_of_measurement, UnitOfTime.MINUTES)
+        self.assertEqual(
+            num_hold.entity_description.device_class, NumberDeviceClass.DURATION
+        )
+        self.assertEqual(
+            num_hold.entity_description.entity_category, EntityCategory.CONFIG
+        )
 
         # altitude_meters
-        num_alt = StaggNumber(
-            self.coordinator,
-            entry,
-            "altitude_meters",
-            "Altitude Setting",
-            0,
-            3000,
-            1,
-            UnitOfLength.METERS,
-            "mdi:elevation-rise",
-            lambda val: f"setaltitudem {int(val)}",
+        num_alt = StaggNumber(self.coordinator, entry, by_key["altitude_meters"])
+        self.assertEqual(
+            num_alt.entity_description.native_unit_of_measurement, UnitOfLength.METERS
         )
-        self.assertEqual(num_alt._attr_native_unit_of_measurement, UnitOfLength.METERS)
+        self.assertEqual(
+            num_alt.entity_description.device_class, NumberDeviceClass.DISTANCE
+        )
+        self.assertEqual(num_alt.entity_description.mode, NumberMode.BOX)
+        self.assertEqual(
+            num_alt.entity_description.entity_category, EntityCategory.CONFIG
+        )
 
         # schedule_temperature
-        num_sch = StaggNumber(
-            self.coordinator,
-            entry,
-            "schedule_temperature",
-            "Schedule Temperature",
-            40,
-            100,
-            0.5,
+        num_sch = StaggNumber(self.coordinator, entry, by_key["schedule_temperature"])
+        self.assertEqual(
+            num_sch.entity_description.native_unit_of_measurement,
             UnitOfTemperature.CELSIUS,
-            "mdi:thermometer-auto",
-            lambda val: f"setsetting schtempr {round(val * 1.8 + 32)}",
-            device_class=NumberDeviceClass.TEMPERATURE,
         )
-        self.assertEqual(num_sch._attr_native_unit_of_measurement, UnitOfTemperature.CELSIUS)
-        self.assertEqual(num_sch._attr_device_class, NumberDeviceClass.TEMPERATURE)
+        self.assertEqual(
+            num_sch.entity_description.device_class, NumberDeviceClass.TEMPERATURE
+        )
+        self.assertEqual(
+            num_sch.entity_description.entity_category, EntityCategory.CONFIG
+        )
 
-    # 12. Extended entities filtering and altitude-based boil temperature
-    async def test_extended_entities_filtering(self):
-        """Verify unreadable sensors are excluded by default and included when enable_extended_entities=True."""
+    # 12. All 7 platforms register all entities with entity_registry_enabled_default and EntityCategory
+    async def test_all_platforms_register_entities_and_defaults(self):
+        """Verify all 7 platforms register all entities and use entity_registry_enabled_default=False for extended ones."""
         from custom_components.staggassistant.binary_sensor import (
-            EXTENDED_BINARY_SENSOR_KEYS,
             async_setup_entry as bsensor_setup,
         )
+        from custom_components.staggassistant.button import (
+            BUTTON_DESCRIPTIONS,
+            async_setup_entry as button_setup,
+        )
+        from custom_components.staggassistant.climate import (
+            async_setup_entry as climate_setup,
+        )
+        from custom_components.staggassistant.number import (
+            async_setup_entry as number_setup,
+        )
+        from custom_components.staggassistant.select import (
+            SELECT_DESCRIPTIONS,
+            async_setup_entry as select_setup,
+        )
         from custom_components.staggassistant.sensor import (
-            EXTENDED_SENSOR_KEYS,
             async_setup_entry as sensor_setup,
         )
+        from custom_components.staggassistant.switch import (
+            SWITCH_DESCRIPTIONS,
+            async_setup_entry as switch_setup,
+        )
 
-        entry_default = MagicMock()
-        entry_default.entry_id = "test_entry"
-        entry_default.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
-        entry_default.options = {}
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        entry.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
+        entry.options = {}
+        entry.runtime_data = self.coordinator
 
-        self.mock_hass.data = {"staggassistant": {"test_entry": self.coordinator}}
+        climates = []
+        await climate_setup(self.mock_hass, entry, climates.extend)
+        self.assertEqual(len(climates), 1)
 
-        # Default: extended entities disabled
-        sensors_default = []
-        await sensor_setup(self.mock_hass, entry_default, lambda ents, _: sensors_default.extend(ents))
-        sensor_keys_default = {s.entity_description.key for s in sensors_default}
-        self.assertTrue(EXTENDED_SENSOR_KEYS.isdisjoint(sensor_keys_default))
-        self.assertIn("current_temp", sensor_keys_default)
-        self.assertIn("target_temp", sensor_keys_default)
-        self.assertIn("state_mode", sensor_keys_default)
+        sensors = []
+        await sensor_setup(self.mock_hass, entry, sensors.extend)
+        sensor_by_key = {s.entity_description.key: s for s in sensors}
+        self.assertEqual(len(sensors), len(SENSOR_DESCRIPTIONS))
+        self.assertTrue(sensor_by_key["current_temp"].entity_description.entity_registry_enabled_default)
+        self.assertTrue(sensor_by_key["target_temp"].entity_description.entity_registry_enabled_default)
+        self.assertTrue(sensor_by_key["state_mode"].entity_description.entity_registry_enabled_default)
+        self.assertTrue(sensor_by_key["clock_time"].entity_description.entity_registry_enabled_default)
+        self.assertEqual(sensor_by_key["clock_time"].entity_description.entity_category, EntityCategory.DIAGNOSTIC)
+        for key in ("boil_temp", "schedule_time", "schedule_temperature"):
+            self.assertFalse(sensor_by_key[key].entity_description.entity_registry_enabled_default)
+            self.assertEqual(sensor_by_key[key].entity_description.entity_category, EntityCategory.DIAGNOSTIC)
 
-        bsensors_default = []
-        await bsensor_setup(self.mock_hass, entry_default, lambda ents, _: bsensors_default.extend(ents))
-        bsensor_keys_default = {s.entity_description.key for s in bsensors_default}
-        self.assertTrue(EXTENDED_BINARY_SENSOR_KEYS.isdisjoint(bsensor_keys_default))
-        self.assertIn("is_docked", bsensor_keys_default)
-        self.assertIn("is_heating", bsensor_keys_default)
-        self.assertIn("no_water", bsensor_keys_default)
+        bsensors = []
+        await bsensor_setup(self.mock_hass, entry, bsensors.extend)
+        bsensor_by_key = {s.entity_description.key: s for s in bsensors}
+        self.assertEqual(len(bsensors), len(BINARY_SENSOR_DESCRIPTIONS))
+        self.assertFalse(bsensor_by_key["in_pre_boil"].entity_description.entity_registry_enabled_default)
+        for key in ("is_docked", "is_heating", "no_water", "target_reached", "is_holding"):
+            self.assertTrue(bsensor_by_key[key].entity_description.entity_registry_enabled_default)
 
-        # Extended enabled: all entities included
-        entry_extended = MagicMock()
-        entry_extended.entry_id = "test_entry"
-        entry_extended.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
-        entry_extended.options = {"enable_extended_entities": True}
+        buttons = []
+        await button_setup(self.mock_hass, entry, buttons.extend)
+        button_by_key = {b.entity_description.key: b for b in buttons}
+        self.assertEqual(len(buttons), len(BUTTON_DESCRIPTIONS))
+        self.assertEqual(button_by_key["reload_data"].entity_description.entity_category, EntityCategory.DIAGNOSTIC)
+        self.assertIsNone(button_by_key["long_press_2"].entity_description.entity_category)
+        for key in ("press_button_1", "press_button_2", "rotate_left", "rotate_right", "sync_time"):
+            self.assertEqual(button_by_key[key].entity_description.entity_category, EntityCategory.CONFIG)
 
-        sensors_ext = []
-        await sensor_setup(self.mock_hass, entry_extended, lambda ents, _: sensors_ext.extend(ents))
-        sensor_keys_ext = {s.entity_description.key for s in sensors_ext}
-        self.assertTrue(EXTENDED_SENSOR_KEYS.issubset(sensor_keys_ext))
+        switches = []
+        await switch_setup(self.mock_hass, entry, switches.extend)
+        self.assertEqual(len(switches), len(SWITCH_DESCRIPTIONS))
+        self.assertFalse(switches[0].entity_description.entity_registry_enabled_default)
+        self.assertEqual(switches[0].entity_description.entity_category, EntityCategory.CONFIG)
 
-        bsensors_ext = []
-        await bsensor_setup(self.mock_hass, entry_extended, lambda ents, _: bsensors_ext.extend(ents))
-        bsensor_keys_ext = {s.entity_description.key for s in bsensors_ext}
-        self.assertTrue(EXTENDED_BINARY_SENSOR_KEYS.issubset(bsensor_keys_ext))
+        numbers = []
+        await number_setup(self.mock_hass, entry, numbers.extend)
+        self.assertEqual(len(numbers), len(NUMBER_DESCRIPTIONS))
+        for num in numbers:
+            self.assertFalse(num.entity_description.entity_registry_enabled_default)
+            self.assertEqual(num.entity_description.entity_category, EntityCategory.CONFIG)
+
+        selects = []
+        await select_setup(self.mock_hass, entry, selects.extend)
+        self.assertEqual(len(selects), len(SELECT_DESCRIPTIONS))
+        for sel in selects:
+            self.assertFalse(sel.entity_description.entity_registry_enabled_default)
+            self.assertEqual(sel.entity_description.entity_category, EntityCategory.CONFIG)
 
     async def test_boil_temperature_calculated_from_altitude(self):
         """Test boil_temp is estimated from altitude if kettle returns no boil_temp."""
@@ -705,31 +721,27 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
 
     # 16. State mode sensor formatting for S_NoWater and S_Standby
     def test_firmware_1_2_26_state_mode_sensor_formatting(self):
-        """Test state_mode sensor formatting for S_NoWater, S_Standby, and other modes."""
+        """Test state_mode sensor formatting returns normalized ENUM values."""
         entry = MagicMock()
         entry.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
         state_mode_desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "state_mode")
         sensor = StaggSensor(self.coordinator, entry, state_mode_desc)
 
-        # S_NoWater -> "Low Water Alert"
-        self.coordinator.data = {"mode": "S_NoWater"}
-        self.assertEqual(sensor.native_value, "Low Water Alert")
-
-        # S_Standby -> "Standby"
-        self.coordinator.data = {"mode": "S_Standby"}
-        self.assertEqual(sensor.native_value, "Standby")
-
-        # S_StartupToTempr -> "Heating to Target"
-        self.coordinator.data = {"mode": "S_StartupToTempr"}
-        self.assertEqual(sensor.native_value, "Heating to Target")
-
-        # S_Heat -> "Heat"
-        self.coordinator.data = {"mode": "S_Heat"}
-        self.assertEqual(sensor.native_value, "Heat")
-
-        # S_Hold_Indefinite -> "Hold Indefinite"
-        self.coordinator.data = {"mode": "S_Hold_Indefinite"}
-        self.assertEqual(sensor.native_value, "Hold Indefinite")
+        expected = [
+            ("S_NoWater", "low_water"),
+            ("S_Standby", "standby"),
+            ("S_StartupToTempr", "heating_to_target"),
+            ("S_Heat", "heat"),
+            ("S_Hold_Indefinite", "hold"),
+            ("S_PreBoil", "pre_boil"),
+            ("S_FAIL", "fail"),
+            ("S_OTA", "ota"),
+            ("S_SomeFutureMode", "unknown"),
+        ]
+        for raw_mode, normalized in expected:
+            with self.subTest(raw_mode=raw_mode):
+                self.coordinator.data = {"mode": raw_mode}
+                self.assertEqual(sensor.native_value, normalized)
 
         # None / missing mode
         self.coordinator.data = {}
@@ -737,9 +749,9 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
 
     # 17. OptionsFlow modern signature and execution
     async def test_options_flow_signature_and_execution(self):
-        """Test OptionsFlow takes no __init__ args and handles steps properly."""
+        """Test OptionsFlow takes no __init__ args and handles scan_interval form."""
         entry = MagicMock()
-        entry.data = {"ip_address": "192.168.1.100", "scan_interval": 15, "enable_extended_entities": False}
+        entry.data = {"ip_address": "192.168.1.100", "scan_interval": 15}
         entry.options = {}
 
         # async_get_options_flow returns StaggAssistantOptionsFlow() with no arguments
@@ -750,28 +762,19 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         flow.config_entry = entry
         flow.hass = MagicMock()
 
-        # Test initial menu
+        # Test initial form
         form_res = await flow.async_step_init()
-        self.assertEqual(form_res["type"], "menu")
+        self.assertEqual(form_res["type"], "form")
         self.assertEqual(form_res["step_id"], "init")
-        self.assertIn("settings", form_res["menu_options"])
-        self.assertIn("bluetooth", form_res["menu_options"])
 
-        # Test options submission through the settings step
-        with unittest.mock.patch(
-            "custom_components.staggassistant.config_flow.async_validate_kettle",
-            AsyncMock(return_value=None),
-        ):
-            submit_res = await flow.async_step_settings(
-                {"ip_address": "192.168.1.100", "scan_interval": 30, "enable_extended_entities": True}
-            )
+        # Test options submission
+        submit_res = await flow.async_step_init({"scan_interval": 30})
         self.assertEqual(submit_res["type"], "create_entry")
-        self.assertEqual(submit_res["data"]["scan_interval"], 30)
-        self.assertTrue(submit_res["data"]["enable_extended_entities"])
+        self.assertEqual(submit_res["data"], {"scan_interval": 30})
 
     # 18. Settings cache persistent storage (survives HA restarts)
     async def test_settings_cache_storage_persistence(self):
-        """Test coordinator loads saved settings on startup and persists updates."""
+        """Test coordinator loads saved settings, debounces via async_delay_save, and flushes via async_save."""
         mock_hass = MagicMock()
         coord = StaggLinkCoordinator(mock_hass, "192.168.1.100", 15)
 
@@ -790,7 +793,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         self.assertEqual(coord._cached_settings["chime_volume"], 7)
         self.assertEqual(coord._cached_settings["clock_mode"], 1)
 
-        # 2. When async_send_command sends a command, settings are persisted
+        # 2. When async_send_command updates settings, debounced async_delay_save is scheduled
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.raise_for_status = MagicMock()
@@ -802,7 +805,16 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
 
         await coord.async_send_command("setsetting hold 25")
         self.assertEqual(coord._cached_settings["hold_time_minutes"], 25)
-        coord._store.async_save.assert_called()
+        self.assertEqual(len(coord._store.delay_save_calls), 1)
+        data_func, _delay = coord._store.delay_save_calls[0]
+        pending = data_func()
+        self.assertEqual(pending["hold_time_minutes"], 25)
+        self.assertEqual(pending["altitude_meters"], 1200)
+
+        # 3. Flushing immediately persists via async_save
+        coord._store.async_save.assert_not_called()
+        await coord.async_flush_store()
+        coord._store.async_save.assert_called_once()
         last_saved = coord._store.async_save.call_args[0][0]
         self.assertEqual(last_saved["hold_time_minutes"], 25)
         self.assertEqual(last_saved["altitude_meters"], 1200)
@@ -829,7 +841,7 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
                 res = await flow.async_step_user({"ip_address": host})
                 self.assertEqual(res["type"], "form")
                 self.assertIn("ip_address", res["errors"])
-                self.assertEqual(res["errors"]["ip_address"], "invalid_ip")
+                self.assertEqual(res["errors"]["ip_address"], "invalid_host")
 
     # 20. Config flow /temp endpoint validation and fallback
     async def test_config_flow_temp_endpoint_malformed_json_fallback(self):
@@ -884,14 +896,14 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
         self.coordinator.data = {"is_docked": False, "mode": "S_Off", "no_water": False}
         with self.assertRaises(HomeAssistantError) as ctx:
             await climate.async_set_hvac_mode(HVACMode.HEAT)
-        self.assertIn("not on the base", str(ctx.exception))
+        self.assertEqual(ctx.exception.translation_key, "kettle_undocked")
         self.coordinator.async_send_command.assert_not_called()
 
         # Low water warning
         self.coordinator.data = {"is_docked": True, "mode": "S_NoWater", "no_water": True}
         with self.assertRaises(HomeAssistantError) as ctx:
             await climate.async_set_hvac_mode(HVACMode.HEAT)
-        self.assertIn("low or no water", str(ctx.exception))
+        self.assertEqual(ctx.exception.translation_key, "kettle_no_water")
         self.coordinator.async_send_command.assert_not_called()
 
         # Safe on base with water
@@ -917,11 +929,17 @@ ketl= ho 0 wd 0 nw 0 ipb 0 bf 0 tr 0
     # 23. Button long_press_2 guarantees button release (2u)
     async def test_button_long_press_2_guarantees_release(self):
         """Test that long_press_2 always sends 2u release command even on failure."""
-        from custom_components.staggassistant.button import StaggButton
+        from custom_components.staggassistant.button import (
+            BUTTON_DESCRIPTIONS,
+            StaggButton,
+        )
 
         entry = MagicMock()
         entry.data = {"ip_address": "192.168.1.100", "name": "Kettle"}
-        btn = StaggButton(self.coordinator, entry, "long_press_2", "Start Timer", "mdi:timer-play", "_long_press_2")
+        long_press_desc = next(
+            d for d in BUTTON_DESCRIPTIONS if d.key == "long_press_2"
+        )
+        btn = StaggButton(self.coordinator, entry, long_press_desc)
 
         commands_sent = []
         async def mock_send(cmd):

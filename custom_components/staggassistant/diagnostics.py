@@ -1,7 +1,9 @@
 """Diagnostics support for StaggAssistant."""
+from __future__ import annotations
+
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -9,30 +11,40 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_IP_ADDRESS,
     CONF_NAME,
-    CONF_SCAN_INTERVAL,
     CONF_WIFI_MAC,
-    DOMAIN,
 )
-from .coordinator import StaggLinkCoordinator
+from .coordinator import StaggConfigEntry
+
+TO_REDACT: set[str] = {
+    CONF_IP_ADDRESS,
+    CONF_WIFI_MAC,
+    CONF_BLE_ADDRESS,
+    CONF_DEVICE_ID,
+    CONF_NAME,
+    "title",
+    "unique_id",
+    "ssid",
+}
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: StaggConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Return redacted diagnostics for a config entry."""
+    coordinator = entry.runtime_data
 
-    return {
+    payload: dict[str, Any] = {
         "entry": {
             "title": entry.title,
-            "name": entry.data.get(CONF_NAME),
-            "ip_address": entry.data.get(CONF_IP_ADDRESS),
-            "wifi_mac": entry.data.get(CONF_WIFI_MAC),
-            "ble_address": entry.data.get(CONF_BLE_ADDRESS),
-            "device_id": entry.data.get(CONF_DEVICE_ID),
-            "scan_interval": entry.options.get(
-                CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL)
-            ),
+            "unique_id": entry.unique_id,
+            "data": dict(entry.data),
+            "options": dict(entry.options),
+        },
+        "runtime": {
+            "firmware_mode": coordinator.client.firmware_mode.value,
+            "prtsettings_supported": coordinator.client.prtsettings_supported,
+            "last_update_success": getattr(coordinator, "last_update_success", None),
         },
         "coordinator_data": coordinator.data,
     }
+    return async_redact_data(payload, TO_REDACT)

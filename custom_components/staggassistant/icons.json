@@ -1,0 +1,123 @@
+{
+  "entity": {
+    "climate": {
+      "kettle": {
+        "default": "mdi:kettle",
+        "state": {
+          "heat": "mdi:kettle-steam"
+        }
+      }
+    },
+    "sensor": {
+      "current_temp": {
+        "default": "mdi:thermometer"
+      },
+      "target_temp": {
+        "default": "mdi:thermometer-check"
+      },
+      "boil_temp": {
+        "default": "mdi:water-boiler"
+      },
+      "state_mode": {
+        "default": "mdi:kettle-steam"
+      },
+      "clock_time": {
+        "default": "mdi:clock-time-eight-outline"
+      },
+      "schedule_time": {
+        "default": "mdi:calendar-clock-outline"
+      },
+      "schedule_temperature": {
+        "default": "mdi:thermometer-auto"
+      }
+    },
+    "binary_sensor": {
+      "is_docked": {
+        "default": "mdi:kettle",
+        "state": {
+          "on": "mdi:kettle",
+          "off": "mdi:kettle-outline"
+        }
+      },
+      "no_water": {
+        "default": "mdi:water-check",
+        "state": {
+          "on": "mdi:water-alert",
+          "off": "mdi:water-check"
+        }
+      },
+      "target_reached": {
+        "default": "mdi:thermometer-check"
+      },
+      "in_pre_boil": {
+        "default": "mdi:water-boiler"
+      },
+      "is_heating": {
+        "default": "mdi:fire"
+      },
+      "is_holding": {
+        "default": "mdi:timer-sand"
+      }
+    },
+    "switch": {
+      "pre_boil": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "on": "mdi:water-boiler",
+          "off": "mdi:water-boiler-off"
+        }
+      }
+    },
+    "number": {
+      "hold_time_minutes": {
+        "default": "mdi:timer-sand"
+      },
+      "altitude_meters": {
+        "default": "mdi:elevation-rise"
+      },
+      "chime_volume": {
+        "default": "mdi:volume-high"
+      },
+      "schedule_temperature": {
+        "default": "mdi:thermometer-auto"
+      }
+    },
+    "select": {
+      "clock_mode": {
+        "default": "mdi:clock-edit-outline"
+      },
+      "language": {
+        "default": "mdi:translate"
+      },
+      "units": {
+        "default": "mdi:thermometer"
+      },
+      "schedule_mode": {
+        "default": "mdi:calendar-clock"
+      }
+    },
+    "button": {
+      "press_button_2": {
+        "default": "mdi:knob"
+      },
+      "press_button_1": {
+        "default": "mdi:menu"
+      },
+      "rotate_left": {
+        "default": "mdi:rotate-left"
+      },
+      "rotate_right": {
+        "default": "mdi:rotate-right"
+      },
+      "long_press_2": {
+        "default": "mdi:timer-play"
+      },
+      "sync_time": {
+        "default": "mdi:clock-check-outline"
+      },
+      "reload_data": {
+        "default": "mdi:refresh"
+      }
+    }
+  }
+}

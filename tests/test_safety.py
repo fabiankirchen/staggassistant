@@ -1,20 +1,58 @@
 """Unit tests for safety blocklist and command verification."""
-import tests  # noqa: F401 - installs Home Assistant test stubs
+from __future__ import annotations
+
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-# Test safety blocklist from coordinator
-from custom_components.staggassistant.coordinator import BLOCKED_COMMANDS, StaggLinkCoordinator
+import tests  # noqa: F401 - installs Home Assistant test stubs
+
+from custom_components.staggassistant.api import ALLOWED_COMMAND_PATTERNS
+from custom_components.staggassistant.coordinator import (
+    BLOCKED_COMMANDS,
+    StaggLinkCoordinator,
+)
 
 
 class TestKettleSafety(unittest.IsolatedAsyncioTestCase):
     """Ensure dangerous direct GPIO and wipe commands are blocked."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.mock_hass = MagicMock()
         self.coordinator = StaggLinkCoordinator(self.mock_hass, "192.168.1.100", 15)
 
-    async def test_blocked_dangerous_commands(self):
+    async def test_all_18_blocked_commands_present_and_rejected(self) -> None:
+        """Verify all 18 BLOCKED_COMMANDS are defined and raise HomeAssistantError."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        expected_blocked = {
+            "heaton",
+            "heatoff",
+            "warmon",
+            "warmoff",
+            "warmduty",
+            "gpioset",
+            "reset",
+            "clrsettings",
+            "wifierase",
+            "wifioff",
+            "provreset",
+            "eraseotherpart",
+            "adcsamples",
+            "htest",
+            "hperiod",
+            "triactrace",
+            "lpsleep",
+            "lpnow",
+        }
+        self.assertEqual(len(BLOCKED_COMMANDS), 18)
+        self.assertEqual(BLOCKED_COMMANDS, expected_blocked)
+
+        for cmd in sorted(BLOCKED_COMMANDS):
+            with self.subTest(cmd=cmd):
+                with self.assertRaises(HomeAssistantError):
+                    await self.coordinator.async_send_command(cmd)
+
+    async def test_blocked_dangerous_commands(self) -> None:
         """Verify that direct hardware heater commands and wipe commands raise an error."""
         from homeassistant.exceptions import HomeAssistantError
 
@@ -47,9 +85,20 @@ class TestKettleSafety(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(HomeAssistantError):
                     await self.coordinator.async_send_command(cmd)
 
-    async def test_allowed_safe_commands(self):
+    async def test_trailing_newline_injection_blocked_by_z_anchor(self) -> None:
+        """Verify trailing newlines cannot bypass ALLOWED_COMMAND_PATTERNS (\\Z protection)."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        for payload in ("ss S_Heat\n", "1\n"):
+            with self.subTest(payload=payload):
+                self.assertFalse(
+                    any(p.match(payload) for p in ALLOWED_COMMAND_PATTERNS)
+                )
+                with self.assertRaises(HomeAssistantError):
+                    await self.coordinator.async_send_command(payload)
+
+    async def test_allowed_safe_commands(self) -> None:
         """Verify that legitimate state machine commands pass the safety guard."""
-        # Mock session.get context manager
         mock_response = AsyncMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.read = AsyncMock(return_value=b"OK")
@@ -58,7 +107,9 @@ class TestKettleSafety(unittest.IsolatedAsyncioTestCase):
         mock_cm = AsyncMock()
         mock_cm.__aenter__.return_value = mock_response
 
-        self.coordinator.session.get = MagicMock(return_value=mock_cm)
+        self.coordinator.session.get = MagicMock(
+            side_effect=lambda url, **kwargs: mock_cm
+        )
 
         safe_samples = [
             "ss S_Heat",
@@ -109,7 +160,7 @@ class TestKettleSafety(unittest.IsolatedAsyncioTestCase):
                 result = await self.coordinator.async_send_command(cmd)
                 self.assertEqual(result, "OK")
 
-    async def test_disallowed_by_strict_allowlist(self):
+    async def test_disallowed_by_strict_allowlist(self) -> None:
         """Verify commands outside the strict allowlist are blocked."""
         from homeassistant.exceptions import HomeAssistantError
 

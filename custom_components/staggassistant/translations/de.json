@@ -5,7 +5,7 @@
         "title": "StaggAssistant Einrichtung",
         "description": "Finde deinen Wasserkocher über Bluetooth oder gib die IP-Adresse manuell ein.",
         "menu_options": {
-          "bluetooth": "Wasserkocher suchen (Bluetooth)",
+          "bluetooth_scan": "Wasserkocher suchen (Bluetooth)",
           "manual": "IP-Adresse manuell eingeben"
         }
       },
@@ -16,49 +16,47 @@
           "ip_address": "IP-Adresse",
           "name": "Name",
           "scan_interval": "Update-Intervall (Sekunden)"
+        },
+        "data_description": {
+          "ip_address": "Die lokale IP-Adresse oder der Hostname deines Stagg EKG Pro Wasserkochers.",
+          "scan_interval": "Abfrageintervall in Sekunden (5–120)."
         }
       },
-      "bluetooth": {
+      "bluetooth_scan": {
         "title": "Stagg-Wasserkocher auswählen",
         "description": "Stelle sicher, dass der Wasserkocher eingeschaltet und in der Nähe ist. {device_count} Wasserkocher über Bluetooth gefunden. Beim Auswählen wird die IP-Adresse automatisch gelesen.",
         "data": {
           "ble_address": "Bluetooth-Gerät"
         }
-      }
-    },
-    "error": {
-      "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
-      "invalid_auth": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
-      "invalid_ip": "Ungültiges IP-Adress- oder Hostname-Format.",
-      "no_bluetooth_devices": "Kein Stagg-Wasserkocher über Bluetooth gefunden. Stelle sicher, dass der Wasserkocher eingeschaltet ist und die Home-Assistant-Bluetooth-Integration funktioniert, oder gib die IP-Adresse manuell ein.",
-      "cannot_resolve_ip": "Der Wasserkocher wurde über Bluetooth gefunden, aber seine IP-Adresse konnte nicht ermittelt werden. Versuche es erneut oder gib die IP-Adresse manuell ein.",
-      "already_configured": "Dieser Wasserkocher ist bereits konfiguriert."
-    },
-    "abort": {
-      "already_configured": "Gerät ist bereits konfiguriert."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "StaggAssistant Optionen",
-        "description": "Passe die Integration an, aktualisiere die IP-Adresse des Wasserkochers oder finde ihn über Bluetooth neu.",
-        "menu_options": {
-          "settings": "Allgemeine Einstellungen & IP-Adresse",
-          "bluetooth": "Wasserkocher über Bluetooth finden"
-        }
       },
-      "settings": {
-        "title": "StaggAssistant Einstellungen",
-        "description": "Aktualisiere das Abfrageintervall, erweiterte Entitäten oder die IP-Adresse des Wasserkochers.\n\n⚠️ **Hinweis zu erweiterten Entitäten:** Ab Firmware 1.2.26 blockiert Fellow das Auslesen von Geräteeinstellungen über WLAN. Erweiterte Schalter, Regler und Sensoren (Hold-Dauer, Chime-Lautstärke, Siedepunkt, Zeitplan, Höhenmeter) basieren auf lokalem Caching und Schätzungen und werden standardmäßig ausgeblendet, um 'Unbekannt'-Zustände und Desynchronisation zu vermeiden.",
+      "bluetooth_confirm": {
+        "title": "Stagg-Wasserkocher Einrichtung bestätigen",
+        "description": "Wasserkocher '{name}' unter IP-Adresse {ip_address} gefunden. Klicken Sie auf Absenden, um die Einrichtung abzuschließen.",
         "data": {
-          "ip_address": "IP-Adresse",
-          "scan_interval": "Update-Intervall (Sekunden)",
-          "enable_extended_entities": "Erweiterte Einstellungen & Sensoren aktivieren (Experten)"
+          "name": "Name",
+          "scan_interval": "Update-Intervall (Sekunden)"
         }
       },
-      "bluetooth": {
-        "title": "Wasserkocher über Bluetooth finden",
+      "reconfigure": {
+        "title": "StaggAssistant neu konfigurieren",
+        "description": "Aktuelle IP-Adresse: {current_ip}. Verbindungseinstellungen aktualisieren oder Wasserkocher neu erkennen.",
+        "menu_options": {
+          "reconfigure_manual": "IP-Adresse manuell aktualisieren",
+          "reconfigure_bluetooth": "Über Bluetooth neu erkennen"
+        }
+      },
+      "reconfigure_manual": {
+        "title": "IP-Adresse aktualisieren",
+        "description": "Gib die neue IP-Adresse oder den Hostnamen für deinen Stagg EKG Pro Wasserkocher ein.",
+        "data": {
+          "ip_address": "IP-Adresse"
+        },
+        "data_description": {
+          "ip_address": "Die aktualisierte lokale IP-Adresse oder der Hostname deines Wasserkochers."
+        }
+      },
+      "reconfigure_bluetooth": {
+        "title": "Über Bluetooth neu erkennen",
         "description": "Aktuelle IP-Adresse: {current_ip}\n\nStelle sicher, dass der Wasserkocher eingeschaltet und in der Nähe ist. {device_count} Wasserkocher über Bluetooth gefunden. Beim Auswählen wird die IP-Adresse automatisch aktualisiert.",
         "data": {
           "ble_address": "Bluetooth-Gerät"
@@ -67,14 +65,99 @@
     },
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
-      "invalid_auth": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
-      "invalid_ip": "Ungültiges IP-Adress- oder Hostname-Format.",
+      "invalid_device": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
+      "invalid_host": "Ungültiges IP-Adress- oder Hostname-Format.",
       "no_bluetooth_devices": "Kein Stagg-Wasserkocher über Bluetooth gefunden. Stelle sicher, dass der Wasserkocher eingeschaltet ist und die Home-Assistant-Bluetooth-Integration funktioniert, oder gib die IP-Adresse manuell ein.",
       "cannot_resolve_ip": "Der Wasserkocher wurde über Bluetooth gefunden, aber seine IP-Adresse konnte nicht ermittelt werden. Versuche es erneut oder gib die IP-Adresse manuell ein.",
       "already_configured": "Dieser Wasserkocher ist bereits konfiguriert."
+    },
+    "abort": {
+      "already_configured": "Gerät ist bereits konfiguriert.",
+      "cannot_resolve_ip": "Der Wasserkocher wurde über Bluetooth gefunden, aber seine IP-Adresse konnte nicht ermittelt werden.",
+      "reconfigure_successful": "Die Neukonfiguration war erfolgreich.",
+      "wrong_device": "Das ausgewählte Gerät entspricht nicht dem konfigurierten Wasserkocher."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "StaggAssistant Optionen",
+        "description": "Abfrageintervall der Integration anpassen.",
+        "data": {
+          "scan_interval": "Update-Intervall (Sekunden)"
+        },
+        "data_description": {
+          "scan_interval": "Abfrageintervall in Sekunden (5–120)."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "empty_command": {
+      "message": "Befehl darf nicht leer sein."
+    },
+    "forbidden_characters": {
+      "message": "Befehl enthält unzulässige Zeichen."
+    },
+    "command_not_allowed": {
+      "message": "Befehl ist durch die Sicherheits-Whitelist nicht erlaubt."
+    },
+    "timeout": {
+      "message": "Zeitüberschreitung bei der Verbindung zu Host {host}."
+    },
+    "connection_error": {
+      "message": "Fehler beim Verbinden mit Host {host}: {error}"
+    },
+    "kettle_undocked": {
+      "message": "Wasserkocher ist von der Basis abgenommen."
+    },
+    "kettle_no_water": {
+      "message": "Wasserkocher hat kein Wasser (Trockengehschutz aktiv)."
+    },
+    "kettle_state_unknown": {
+      "message": "Zustand des Wasserkochers ist unbekannt oder offline."
+    },
+    "invalid_option": {
+      "message": "Ungültige Option angegeben: {option}"
+    },
+    "value_out_of_range": {
+      "message": "Wert liegt außerhalb des gültigen Bereichs. Muss zwischen {min} und {max} liegen."
+    },
+    "invalid_response": {
+      "message": "Ungültige Antwort vom Wasserkocher erhalten: {error}"
+    }
+  },
+  "issues": {
+    "kettle_unreachable": {
+      "title": "{name} nicht erreichbar",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "IP-Adresse für {name} aktualisieren",
+            "description": "StaggAssistant konnte '{name}' unter {ip_address} über mehrere Abfragezyklen nicht erreichen. Gib die aktuelle IP-Adresse oder den Hostnamen ein, um die Verbindung wiederherzustellen.",
+            "data": {
+              "ip_address": "IP-Adresse"
+            },
+            "data_description": {
+              "ip_address": "Die aktuelle lokale IP-Adresse oder der Hostname deines Stagg EKG Pro Wasserkochers."
+            }
+          }
+        },
+        "error": {
+          "invalid_host": "Ungültiges IP-Adress- oder Hostname-Format.",
+          "cannot_connect": "Verbindung fehlgeschlagen (Timeout).",
+          "invalid_device": "Gerät antwortet, ist aber kein Stagg EKG Pro.",
+          "already_configured": "Dieser Wasserkocher ist bereits konfiguriert."
+        }
+      }
     }
   },
   "entity": {
+    "climate": {
+      "kettle": {
+        "name": "Wasserkocher"
+      }
+    },
     "sensor": {
       "current_temp": {
         "name": "Aktuelle Temperatur"
@@ -85,9 +168,6 @@
       "boil_temp": {
         "name": "Siedetemperatur"
       },
-      "state_mode": {
-        "name": "Betriebszustand"
-      },
       "clock_time": {
         "name": "Uhrzeit"
       },
@@ -96,6 +176,21 @@
       },
       "schedule_temperature": {
         "name": "Zeitplan-Temperatur"
+      },
+      "state_mode": {
+        "name": "Betriebszustand",
+        "state": {
+          "off": "Aus",
+          "standby": "Standby",
+          "heat": "Heizen",
+          "heating_to_target": "Aufheizen auf Ziel",
+          "pre_boil": "Pre-Boil",
+          "hold": "Warmhalten",
+          "low_water": "Niedrigwasser",
+          "fail": "Fehler",
+          "ota": "Firmware-Update",
+          "unknown": "Unbekannt"
+        }
       }
     },
     "binary_sensor": {
@@ -147,10 +242,23 @@
         }
       },
       "language": {
-        "name": "Sprachauswahl"
+        "name": "Sprachauswahl",
+        "state": {
+          "en": "Englisch",
+          "fr": "Französisch",
+          "es": "Spanisch",
+          "zh-Hans": "Chinesisch (vereinfacht)",
+          "zh-Hant": "Chinesisch (traditionell)",
+          "ko": "Koreanisch",
+          "ja": "Japanisch"
+        }
       },
       "units": {
-        "name": "Temperatureinheit"
+        "name": "Temperatureinheit",
+        "state": {
+          "C": "Celsius (°C)",
+          "F": "Fahrenheit (°F)"
+        }
       },
       "schedule_mode": {
         "name": "Zeitplan-Modus",
