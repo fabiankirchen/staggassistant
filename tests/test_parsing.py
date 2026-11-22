@@ -87,7 +87,7 @@ class TestCoordinatorParsing(unittest.IsolatedAsyncioTestCase):
         cm_settings = AsyncMock()
         cm_settings.__aenter__.return_value = resp_settings
 
-        def side_effect(url, params=None):
+        def side_effect(url, params=None, **kwargs):
             if "cmd=state" in url or (params and params.get("cmd") == "state"):
                 return cm_state
             return cm_settings

@@ -1,28 +1,49 @@
 """Support for Fellow Stagg EKG Pro sensors."""
-import logging
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Any
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTemperature
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_ENABLE_EXTENDED_ENTITIES,
-    DEFAULT_ENABLE_EXTENDED_ENTITIES,
-    DOMAIN,
-    get_device_identifier,
-    get_stable_id,
-)
-from .coordinator import StaggLinkCoordinator
+from .const import get_stable_id
+from .coordinator import StaggConfigEntry, StaggLinkCoordinator
+from .entity import StaggEntity
 
-_LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 0
 
-EXTENDED_SENSOR_KEYS = {"boil_temp", "schedule_time", "schedule_temperature"}
+_STATE_MODE_MAP: dict[str, str] = {
+    "S_Off": "off",
+    "S_Standby": "standby",
+    "S_Heat": "heat",
+    "S_StartupToTempr": "heating_to_target",
+    "S_PreBoil": "pre_boil",
+    "S_NoWater": "low_water",
+    "S_FAIL": "fail",
+    "S_OTA": "ota",
+}
+
+
+def _map_state_mode(raw_mode: Any) -> str | None:
+    """Map raw kettle mode string to translated enum option."""
+    if not raw_mode:
+        return None
+    mode = str(raw_mode)
+    if not mode:
+        return None
+    if mode in _STATE_MODE_MAP:
+        return _STATE_MODE_MAP[mode]
+    if mode.startswith("S_Hold"):
+        return "hold"
+    return "unknown"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,108 +51,99 @@ class StaggSensorDescription(SensorEntityDescription):
     """Describes a Stagg sensor entity."""
 
     key: str
-    name: str
 
 
 SENSOR_DESCRIPTIONS: tuple[StaggSensorDescription, ...] = (
     StaggSensorDescription(
         key="current_temp",
         translation_key="current_temp",
-        name="Current Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        icon="mdi:thermometer",
     ),
     StaggSensorDescription(
         key="target_temp",
         translation_key="target_temp",
-        name="Target Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        icon="mdi:thermometer-check",
     ),
     StaggSensorDescription(
         key="boil_temp",
         translation_key="boil_temp",
-        name="Boil Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        icon="mdi:water-boiler",
+        entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
     StaggSensorDescription(
         key="state_mode",
         translation_key="state_mode",
-        name="State Mode",
-        icon="mdi:kettle-steam",
+        device_class=SensorDeviceClass.ENUM,
+        options=[
+            "off",
+            "standby",
+            "heat",
+            "heating_to_target",
+            "pre_boil",
+            "hold",
+            "low_water",
+            "fail",
+            "ota",
+            "unknown",
+        ],
     ),
     StaggSensorDescription(
         key="clock_time",
         translation_key="clock_time",
-        name="Clock Time",
-        icon="mdi:clock-time-eight-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     StaggSensorDescription(
         key="schedule_time",
         translation_key="schedule_time",
-        name="Schedule Time",
-        icon="mdi:calendar-clock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
     StaggSensorDescription(
         key="schedule_temperature",
         translation_key="schedule_temperature",
-        name="Schedule Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        icon="mdi:thermometer-auto",
+        entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
 )
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: StaggConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up StaggLink sensors from a config entry."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    enable_extended = entry.options.get(
-        CONF_ENABLE_EXTENDED_ENTITIES,
-        entry.data.get(CONF_ENABLE_EXTENDED_ENTITIES, DEFAULT_ENABLE_EXTENDED_ENTITIES),
+    coordinator = entry.runtime_data
+    async_add_entities(
+        [StaggSensor(coordinator, entry, desc) for desc in SENSOR_DESCRIPTIONS]
     )
-    entities = [
-        StaggSensor(coordinator, entry, desc)
-        for desc in SENSOR_DESCRIPTIONS
-        if enable_extended or desc.key not in EXTENDED_SENSOR_KEYS
-    ]
-    async_add_entities(entities, True)
 
 
-class StaggSensor(CoordinatorEntity[StaggLinkCoordinator], SensorEntity):
+class StaggSensor(StaggEntity, SensorEntity):
     """Representation of a Stagg EKG Pro sensor."""
 
     entity_description: StaggSensorDescription
 
-    def __init__(self, coordinator: StaggLinkCoordinator, entry, description: StaggSensorDescription):
+    def __init__(
+        self,
+        coordinator: StaggLinkCoordinator,
+        entry: StaggConfigEntry,
+        description: StaggSensorDescription,
+    ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
-        self._ip = coordinator.ip
-        device_id = get_device_identifier(entry)
-
-        self._attr_has_entity_name = True
-        self._attr_translation_key = description.key
         self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{description.key}"
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.data.get("name", "Stagg Kettle"),
-            manufacturer="Fellow",
-            model="Stagg EKG Pro",
-            configuration_url=f"http://{self._ip}",
-        )
-
     @property
-    def native_value(self):
+    def native_value(self) -> float | str | None:
         """Return the state of the sensor."""
         if not self.coordinator.data:
             return None
@@ -144,18 +156,7 @@ class StaggSensor(CoordinatorEntity[StaggLinkCoordinator], SensorEntity):
         if key == "boil_temp":
             return self.coordinator.data.get("boil_temp")
         if key == "state_mode":
-            mode = self.coordinator.data.get("mode")
-            if not mode:
-                return None
-            if mode == "S_NoWater":
-                return "Low Water Alert"
-            if mode == "S_Standby":
-                return "Standby"
-            if mode == "S_StartupToTempr":
-                return "Heating to Target"
-            if mode.startswith("S_"):
-                return mode[2:].replace("_", " ").title()
-            return mode
+            return _map_state_mode(self.coordinator.data.get("mode"))
         if key == "clock_time":
             return self.coordinator.data.get("clock_time")
         if key == "schedule_time":

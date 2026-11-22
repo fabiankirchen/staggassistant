@@ -6,141 +6,223 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/fabiankirchen/staggassistant)](https://github.com/fabiankirchen/staggassistant/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A Home Assistant integration for the **Fellow Stagg EKG Pro** kettle.
-This integration communicates directly with the kettle's internal interface over local HTTP.
+A Home Assistant custom integration for the **Fellow Stagg EKG Pro** smart electric kettle.
+StaggAssistant communicates 100% locally with the kettle over your LAN (`local_polling`) without any cloud dependency, and optionally uses Bluetooth Low Energy (BLE) for zero-effort IP discovery and automatic DHCP lease updates.
 
 <br clear="left"/>
 
 ## ✨ Features
 
-* **Dual Firmware Architecture (v1.2.26+ & Legacy):** Automatically leverages the modern `/temp` JSON endpoint on firmware 1.2.26+ while seamlessly falling back to `/cli` commands on older firmware. Robustly handles lifted kettle readings (`NaN`, `-nan`, null).
+* **Automatic Bluetooth Discovery & Manual BLE/IP Setup:** Automatically discovers `EKG-*` kettles via Home Assistant's Bluetooth integration, reads their current IPv4 address, Wi-Fi MAC, and firmware version from BLE GATT characteristics, and automatically refreshes changed DHCP IPs (`discovery-update-info`).
+* **Dual Firmware Architecture (v1.2.26+ & Legacy):** Automatically uses the modern `GET /temp` JSON endpoint on firmware 1.2.26+, caches legacy `/cli` detection to avoid unnecessary 404 requests, periodically re-probes for in-place firmware updates, and robustly sanitizes lifted kettle readings (`NaN`, `-nan`, `null`).
+* **Reconfigure, Options & Automatic Repair Flows:** Update the IP address or rediscover via Bluetooth anytime via **Reconfigure** without losing entities or history, adjust polling intervals (5–120s) via **Options**, and resolve prolonged connection drops directly from **Settings > System > Repairs**.
 * **Hardware & Fire Safety Interlocks:**
-  * **Dry-Boil Guard:** Heating is strictly blocked if low water (`no_water` / `S_NoWater`) is detected.
-  * **Undocked Kettle Protection:** Heating cannot be activated when the kettle is removed from the base (`is_docked == False`).
-  * **Safe Temperature Adjustments:** Adjusting the target temperature slider will not accidentally turn on the heater while the kettle is off.
-  * **Strict Command Allowlist:** All CLI commands are verified against a regex allowlist with strict parameter bounds, blocking raw GPIO commands (`heaton`, `warmduty`), diagnostics (`htest`), or wipe commands (`clrsettings`).
-  * **Guaranteed Dial Release:** Timer button simulation wraps execution in `try...finally:` guaranteeing the release command (`2u`) is always sent.
-* **Persistent Settings Storage:** Persists kettle settings (hold duration, chime, altitude, schedule, clock mode) using Home Assistant's native storage (`Store`) so settings survive Home Assistant restarts even when firmware restricts Wi-Fi reading.
-* **Configurable Options Flow:** Configure polling rate (5–120s), update the kettle's IP address, rediscover it over Bluetooth, and selectively enable extended settings & sensors anytime via the Home Assistant UI.
-* **Bluetooth-Assisted Setup:** Scan for the kettle over BLE and read its current IPv4 address directly from the kettle's status characteristic, with ARP-based matching and manual IP entry as fallbacks.
-* **Full Multilingual Support:** Native English and German (Deutsch) translations for setup, configuration options, entity names, and state selectors.
+  * **Dry-Boil Guard:** Heating (`HVACMode.HEAT`) is strictly blocked if low water (`no_water` / `S_NoWater`) is detected.
+  * **Undocked & Unknown-State Protection:** Heating cannot be started when the kettle is lifted (`is_docked == False`) or telemetry is unavailable (`coordinator.data is None`).
+  * **Safe Temperature Adjustments:** Changing target temperature while off never turns on the heater.
+  * **Strict Command Allowlist:** Every CLI command is checked against an 18-command safety blocklist and strict `\Z`-anchored regex allowlist, blocking raw GPIO/triac commands (`heaton`, `warmduty`, `htest`, `triactrace`) and destructive wipe commands (`clrsettings`, `wifierase`, `reset`).
+  * **Guaranteed Dial Release:** Timer long-press sends `2u` via `asyncio.shield` only after `2d` succeeds.
+* **ESP32 & Flash-Wear Protection:** Serializes all HTTP requests through an `asyncio.Lock` with a 150 ms cooldown, sets `PARALLEL_UPDATES` across all platforms, caps streaming responses, disables HTTP redirects (`allow_redirects=False`), and debounces persistent `Store` writes only when settings actually change.
+* **Native Entity Hygiene & Full Multilingual Support:** Extended/advanced entities use Home Assistant's native `entity_registry_enabled_default = false` and `EntityCategory` (`CONFIG` / `DIAGNOSTIC`), with complete English and German (`de`) translations, `icons.json`, translated exceptions, and redacted diagnostics.
 
 ---
 
-## ⚡️ Important Notice for Firmware 1.2.26+
+## 📱 Supported Devices & Firmware Matrix
 
-Starting with **Firmware 1.2.26**, Fellow updated the ESP32 firmware to silence textual output from the internal `/cli` endpoint (returning only an empty HTML form `<form action="cli"...>`) and introduced a modern `GET /temp` JSON endpoint.
-
-StaggAssistant automatically detects your firmware version:
-* On **v1.2.26+**, live temperature and state are fetched via `/temp`.
-* On **older firmware**, it seamlessly falls back to `/cli?cmd=state`.
-
-### Why are some entities hidden by default?
-On firmware 1.2.26+, reading device settings (such as current hold time, chime volume, or schedule) over Wi-Fi is no longer supported by the kettle's firmware. To prevent your Home Assistant dashboard from being cluttered with **"Unknown"** entities, extended settings and sensors are disabled by default. You can enable them anytime under **Integration Options** (see below).
+| Device | Firmware | State Endpoint | Settings Read-Back | Controls & Safety |
+| :--- | :--- | :--- | :--- | :--- |
+| **Fellow Stagg EKG Pro** | **v1.2.26+** | `GET /temp` (JSON) | Restricted by firmware (persisted via local `Store`) | Full climate, sensors, binary sensors, switches, numbers, selects, buttons |
+| **Fellow Stagg EKG Pro** | **< v1.2.26 (Legacy)** | `GET /cli?cmd=state` | `GET /cli?cmd=prtsettings` | Full climate, sensors, binary sensors, switches, numbers, selects, buttons |
 
 ---
 
-## ⚙️ Configuration & Options
+## 📋 Supported Entities & Functions
 
-After adding the integration, click **Configure** on the StaggAssistant card under **Settings > Devices & Services**. The options menu offers:
+StaggAssistant exposes **27 entities** across **7 platforms** (`climate`, `sensor`, `binary_sensor`, `button`, `switch`, `number`, `select`):
 
-* **General settings & IP address:** Change the polling interval (5–120 seconds, default: 15s), enable extended entities, or update the kettle's IP address manually. If only the interval or extended-entity setting changes, the kettle does not need to be online.
-* **Find kettle via Bluetooth:** Rediscover the kettle and update its IP address automatically. This is the easiest way to fix an IP address that changed after a DHCP lease renewal.
+| Platform | Entity (EN) | Entity (DE) | Category | Default Enabled | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`climate`** | Kettle | Wasserkocher | Primary | ✅ Yes | Main thermostat UI to turn heating on/off and set target temperature (40–100 °C) |
+| **`sensor`** | Current temperature | Aktuelle Temperatur | Primary | ✅ Yes | Current water temperature (`measurement` state class for long-term statistics) |
+| **`sensor`** | Target temperature | Zieltemperatur | Primary | ✅ Yes | Active target temperature |
+| **`sensor`** | State mode | Betriebszustand | Primary | ✅ Yes | Enum state (`off`, `standby`, `heat`, `heating_to_target`, `pre_boil`, `hold`, `low_water`, `fail`, `ota`) |
+| **`sensor`** | Clock time | Uhrzeit | Diagnostic | ✅ Yes | Kettle's current clock time |
+| **`sensor`** | Boil temperature | Siedetemperatur | Diagnostic | ❌ Disabled | Altitude-adjusted boiling temperature |
+| **`sensor`** | Schedule time | Zeitplan-Uhrzeit | Diagnostic | ❌ Disabled | Cached wake-up schedule time (`HH:MM`) |
+| **`sensor`** | Schedule temperature | Zeitplan-Temperatur | Diagnostic | ❌ Disabled | Cached wake-up schedule target temperature |
+| **`binary_sensor`** | Docked | Auf Basis | Primary | ✅ Yes | `connectivity` sensor indicating whether the kettle sits on its base |
+| **`binary_sensor`** | Low water warning | Niedrigwasser-Warnung | Primary | ✅ Yes | `problem` dry-boil / low-water alert (`nw` flag / `S_NoWater`) |
+| **`binary_sensor`** | Target temperature reached | Zieltemperatur erreicht | Primary | ✅ Yes | Indicates water has reached target temperature |
+| **`binary_sensor`** | Heating active | Heizen aktiv | Primary | ✅ Yes | `heat` sensor active during heating, startup, and pre-boil |
+| **`binary_sensor`** | Hold active | Warmhalten aktiv | Primary | ✅ Yes | Active while keep-warm hold mode is running |
+| **`binary_sensor`** | Pre-boil active | Pre-Boil aktiv | Primary | ❌ Disabled | Indicates pre-boil phase is running |
+| **`button`** | Start timer | Brühtimer starten | Primary | ✅ Yes | Long-presses main dial (`2d` → 2s → `2u`) to start brew timer |
+| **`button`** | Press main button | Haupttaster drücken | Config | ✅ Yes | Simulates short dial press (`2`) |
+| **`button`** | Press menu button | Menütaste drücken | Config | ✅ Yes | Simulates back/menu press (`1`) |
+| **`button`** | Rotate dial left | Drehknopf links drehen | Config | ✅ Yes | Simulates counter-clockwise dial rotation (`q`) |
+| **`button`** | Rotate dial right | Drehknopf rechts drehen | Config | ✅ Yes | Simulates clockwise dial rotation (`w`) |
+| **`button`** | Sync time | Uhrzeit synchronisieren | Config | ✅ Yes | Synchronizes Home Assistant local time to kettle (`setclock`) |
+| **`button`** | Reload data | Daten neu laden | Diagnostic | ✅ Yes | Triggers an immediate coordinator refresh |
+| **`switch`** | Pre-boil | Pre-Boil | Config | ❌ Disabled | Toggles pre-boil feature on/off |
+| **`number`** | Hold time duration | Warmhaltezeit | Config | ❌ Disabled | Keep-warm duration in minutes (0–60) |
+| **`number`** | Altitude setting | Höheneinstellung | Config | ❌ Disabled | Elevation in meters (0–3000) for boil calibration |
+| **`number`** | Chime volume | Signalton-Lautstärke | Config | ❌ Disabled | Chime speaker volume (0–10) |
+| **`number`** | Schedule temperature | Zeitplan-Temperatur | Config | ❌ Disabled | Scheduled target temperature (40–100 °C) |
+| **`select`** | Clock style | Uhrenstil | Config | ❌ Disabled | Display clock mode (`off`, `digital`, `analog`) |
+| **`select`** | Language selection | Sprachauswahl | Config | ❌ Disabled | Kettle display language (`en`, `fr`, `es`, `zh-Hans`, `zh-Hant`, `ko`, `ja`) |
+| **`select`** | Temperature units | Temperatureinheit | Config | ❌ Disabled | Display unit (`C`, `F`) |
+| **`select`** | Schedule mode | Zeitplan-Modus | Config | ❌ Disabled | Schedule mode (`off`, `once`, `repeat`) |
 
-### Automatic IP discovery over Bluetooth
-
-The Stagg EKG Pro advertises a BLE name of the form `EKG-aa-bb-cc`, where the last three octets are the last three octets of the kettle's Wi-Fi MAC address. The integration can read the kettle's current IPv4 address directly from its BLE status characteristic, so normally only the kettle needs to be selected:
-
-1. Open **Configure** → **Find kettle via Bluetooth** (or choose **Scan for kettle (Bluetooth)** during initial setup).
-2. Select your `EKG-…` device from the list.
-3. The integration reads the IP address and validates it over HTTP, then reloads automatically.
-
-If the BLE status characteristic cannot be read, the integration falls back to matching the BLE name against the Home Assistant host's ARP table. This requires Home Assistant to be on the same layer-2 network as the kettle (host networking, not a bridged/NAT Docker network). If both methods fail, the manual IP field remains available.
-
-* **Enable extended settings & sensors (Advanced):**
-  * *Disabled (Default):* Exposes the core entities (Climate controller, Current Temperature, Target Temperature, Docked, Heating Active, Hold Active, Low Water Warning, Buttons).
-  * *Enabled:* Unlocks extended controls (Pre-Boil switch, Hold Time slider, Altitude setting, Chime volume, Clock style, Schedule controls, Boil temperature sensor). On firmware 1.2.26+, these rely on persistent local caching (`Store`) and altitude estimates.
-
----
-
-## 📋 Available Entities & Controls
-
-The integration exposes up to **27 entities** to fully monitor and manage your kettle from Home Assistant:
-
-| Platform | Entity (EN) | Entity (DE) | Description |
-| :--- | :--- | :--- | :--- |
-| **`climate`** | Kettle | Wasserkocher | Main thermostat UI to turn on/off and set temperature |
-| **`sensor`** | Current Temperature | Aktuelle Temperatur | Current water temperature (with statistics history) |
-| **`sensor`** | Target Temperature | Zieltemperatur | Target set temperature |
-| **`sensor`** | Boil Temperature | Siedetemperatur | Altitude-adjusted boiling temperature |
-| **`sensor`** | State Mode | Betriebszustand | Human-readable kettle state (Off, Heat, Hold, etc.) |
-| **`sensor`** | Clock Time | Uhrzeit | Current kettle clock time |
-| **`sensor`** | Schedule Time | Zeitplan-Uhrzeit | Scheduled wake-up time (HH:MM) |
-| **`sensor`** | Schedule Temperature | Zeitplan-Temperatur | Scheduled target temperature |
-| **`binary_sensor`** | Docked | Auf Basis | Detects if the kettle is resting on the base |
-| **`binary_sensor`** | Low Water Warning | Niedrigwasser-Warnung | Dry-boil / low-water alert (`nw` flag / `S_NoWater`) |
-| **`binary_sensor`** | Target Temperature Reached | Zieltemperatur erreicht | Signals when water has reached the desired temperature |
-| **`binary_sensor`** | Pre-Boil Active | Pre-Boil aktiv | Signals when pre-boil heating is actively running |
-| **`binary_sensor`** | Heating Active | Heizen aktiv | Indicates heating element operation |
-| **`binary_sensor`** | Hold Active | Warmhalten aktiv | Indicates keep-warm mode is actively maintaining temperature |
-| **`switch`** | Pre-Boil | Pre-Boil | Toggle the pre-boil feature on/off |
-| **`number`** | Hold Time Duration | Warmhaltezeit | Set hold time duration in minutes (0–60) |
-| **`number`** | Altitude Setting | Höheneinstellung | Set altitude for boil calibration (0–3000 m) |
-| **`number`** | Chime Volume | Signalton-Lautstärke | Set chime volume (0–10) |
-| **`number`** | Schedule Temperature | Zeitplan-Temperatur | Set scheduled target temperature |
-| **`select`** | Clock Style | Uhrenstil | Choose off, digital, or analog clock display |
-| **`select`** | Language Selection | Sprachauswahl | Supports all 7 internal languages (EN, FR, ES, ZH-Hans, ZH-Hant, KO, JA) |
-| **`select`** | Temperature Units | Temperatureinheit | Switch display units between Celsius and Fahrenheit |
-| **`select`** | Schedule Mode | Zeitplan-Modus | Choose off, once, or repeat schedule |
-| **`button`** | Press Main Button | Haupttaster drücken | Simulate pressing the main dial button (e.g. toggles heat or confirms) |
-| **`button`** | Press Menu Button | Menütaste drücken | Simulate pressing the back/menu button |
-| **`button`** | Rotate Dial Left | Drehknopf links drehen | Rotate the dial counter-clockwise |
-| **`button`** | Rotate Dial Right | Drehknopf rechts drehen | Rotate the dial clockwise |
-| **`button`** | Start Timer | Brühtimer starten | Long press dial button to start brew timer |
-| **`button`** | Sync Time | Uhrzeit synchronisieren | Sync current Home Assistant system time to the kettle |
-| **`button`** | Reload Data | Daten neu laden | Force a manual data refresh from the kettle |
+> **Tip:** To enable any disabled-by-default entity, open **Settings > Devices & Services > StaggAssistant > [Your Kettle]**, click the entity in the **Entities** list, and toggle **Enabled**.
 
 ---
 
 ## 🚀 Installation
 
-### Option 1: HACS (Recommended)
+### Prerequisites
+* Home Assistant **2024.12.0** or newer.
+* Your Stagg EKG Pro must be connected to the same local network (no guest isolation blocking local HTTP port 80).
+* *(Optional for BLE discovery)* Home Assistant's **Bluetooth** integration and an active local adapter or ESPHome Bluetooth Proxy in range of the kettle.
 
+### Option 1: HACS (Recommended)
 1. Open **HACS** in Home Assistant.
-2. Go to **Integrations** > Top right menu (**⋮**) > **Custom repositories**.
-3. Add the URL of this repository: `https://github.com/fabiankirchen/staggassistant`
-4. Category: **Integration**.
-5. Click **Add**, then search for **StaggAssistant** in the list and install it.
-6. Restart Home Assistant.
+2. Go to **Integrations** > Top-right menu (**⋮**) > **Custom repositories**.
+3. Add `https://github.com/fabiankirchen/staggassistant` with category **Integration**.
+4. Search for **StaggAssistant** and click **Download**.
+5. Restart Home Assistant.
 
 ### Option 2: Manual
-
 1. Download the latest release from the [Releases section](https://github.com/fabiankirchen/staggassistant/releases).
-2. Unzip the file.
-3. Copy the `custom_components/staggassistant` folder into your Home Assistant `/config/custom_components/` directory (so that the path is `/config/custom_components/staggassistant`).
-4. Restart Home Assistant.
+2. Extract and copy `custom_components/staggassistant` into your Home Assistant `/config/custom_components/` directory.
+3. Restart Home Assistant.
 
 ### 🧪 Bleeding-Edge Beta Channel (Optional)
-
-If you would like to test experimental features and rapid automated updates before they are reviewed and merged into this stable repository, you can add the development fork as an additional custom repository in HACS:
-
-* **Repository URL:** `https://github.com/fabiagent/staggassistant`
-* **Category:** `Integration`
-*(Note: Releases on the development fork are autonomous builds intended for early testing).*
+If you want to test experimental features before human hardware verification and merge into this repository, you can track the development fork `https://github.com/fabiagent/staggassistant` in HACS (category: **Integration**).
 
 ---
 
-## ⚙️ Initial Setup
+## ⚙️ Setup, Configuration & Reconfiguration
 
-1. In Home Assistant, go to **Settings** > **Devices & Services**.
-2. Click **Add Integration** in the bottom right corner.
-3. Search for **StaggAssistant**.
-4. Choose one of:
-   * **Scan for kettle (Bluetooth):** Select your `EKG-…` device. The integration reads and validates the IP address automatically.
-   * **Enter IP address manually:** Enter the kettle's IP address and choose your preferred update interval.
-5. Click **Submit**.
+### Initial Setup (`Add Integration`)
+If Home Assistant detects your kettle via Bluetooth (`EKG-*`), it appears automatically under **Settings > Devices & Services** for one-click confirmation. Otherwise:
+1. Go to **Settings > Devices & Services > Add Integration** and search for **StaggAssistant**.
+2. Choose either **Scan for kettle (Bluetooth)** or **Enter IP address manually**.
 
-The Bluetooth option requires the Home Assistant **Bluetooth** integration and a Bluetooth adapter (or an active ESPHome Bluetooth proxy) that can reach the kettle. Manual IP entry works without Bluetooth.
+#### Installation Parameters
+| Parameter | Required | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `ip_address` | Yes (manual) | — | Local IPv4 address (excluding loopback/multicast/reserved) or local hostname (e.g., `kettle.local`, without `http://` or port). |
+| `ble_address` | Yes (BLE) | — | Discovered `EKG-*` Bluetooth device address. |
+| `name` | No | `"Stagg Kettle"` / BLE name | Friendly device name in Home Assistant. |
+| `scan_interval` | No | `15` | Polling interval in seconds (`5–120`). |
+
+### Post-Setup Configuration (`Options`, `Reconfigure` & `Repairs`)
+* **Options (`Configure`):** Adjust `scan_interval` (`5–120` seconds) without reloading or interrupting entities.
+* **Reconfigure (`⋮` → `Reconfigure`):** Update the kettle's IP address manually or rediscover it over Bluetooth while preserving all entity IDs, device identifiers, and history.
+* **Automatic Repair Issues:** If the kettle cannot be reached for 5 consecutive polling cycles, StaggAssistant creates an actionable repair issue under **Settings > System > Repairs** allowing you to enter the new IP directly. The issue clears automatically once the kettle becomes reachable again.
+
+---
+
+## 📊 Data Update & ESP32 Protection
+
+* **Polling Strategy:** Uses a `DataUpdateCoordinator` polling every `15` seconds by default (`5–120`s configurable).
+* **ESP32 Protection:** Every HTTP call is serialized through an `asyncio.Lock` with a 150 ms inter-request cooldown, 6s/10s strict timeouts, `PARALLEL_UPDATES = 1` on write platforms (`0` on read-only sensor platforms), and no `allow_redirects`.
+* **Storage Efficiency:** Cached settings are saved to `.storage/staggassistant_<stable_id>` via `Store.async_delay_save(..., 5.0)` **only** when persistent values change (volatile `clock_time` is never written to disk). Removing the integration cleans up all stored files and open repair issues.
+
+---
+
+## 🤖 Use Cases & Automation Examples
+
+### 1. Morning Coffee Boil Automation
+```yaml
+alias: "Morning Stagg Boil"
+description: "Heat kettle to 94 °C on weekday mornings"
+mode: single
+triggers:
+  - trigger: time
+    at: "07:00:00"
+conditions:
+  - condition: state
+    entity_id: binary_sensor.stagg_kettle_docked
+    state: "on"
+  - condition: state
+    entity_id: binary_sensor.stagg_kettle_low_water_warning
+    state: "off"
+actions:
+  - action: climate.set_temperature
+    target:
+      entity_id: climate.stagg_kettle
+    data:
+      temperature: 94
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.stagg_kettle
+    data:
+      hvac_mode: heat
+```
+
+### 2. Notify When Water Reaches Target Temperature
+```yaml
+alias: "Kettle Ready Notification"
+mode: single
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.stagg_kettle_target_temperature_reached
+    from: "off"
+    to: "on"
+actions:
+  - action: notify.persistent_notification
+    data:
+      title: "Coffee Time!"
+      message: "Your Fellow Stagg EKG Pro has reached {{ states('sensor.stagg_kettle_current_temperature') }} °C."
+```
+
+### 3. Low-Water Safety Alert
+```yaml
+alias: "Kettle Low Water Warning"
+mode: single
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.stagg_kettle_low_water_warning
+    to: "on"
+actions:
+  - action: notify.persistent_notification
+    data:
+      title: "Refill Kettle"
+      message: "Stagg EKG Pro reported low water; heating is blocked."
+```
+
+---
+
+## ⚠️ Known Limitations
+
+* **Firmware 1.2.26+ Settings Read-Back:** Fellow disabled textual output on `/cli?cmd=prtsettings` starting with v1.2.26. Extended settings still work as write commands and persist across Home Assistant restarts via local caching, but changes made physically on the kettle dial are not reflected back to Home Assistant on v1.2.26+.
+* **Single Local HTTP Stack:** The kettle's embedded ESP32 web server handles connections sequentially. Very short polling intervals combined with simultaneous external HTTP clients may cause transient timeouts.
+* **ARP Fallback Scope:** If BLE GATT characteristic `c4b4` cannot be read during Bluetooth resolution, ARP table matching requires Home Assistant to share the same Layer-2 broadcast domain (host networking).
+
+---
+
+## 🔍 Troubleshooting & Debug Logging
+
+1. **Kettle unreachable after router/DHCP change:** Use **Settings > Devices & Services > StaggAssistant > `⋮` > Reconfigure** (or accept the automatic **Repairs** prompt) to enter the new IP or rediscover via Bluetooth.
+2. **Kettle shows "Unavailable" when unplugged or Wi-Fi drops:** Expected behavior. Home Assistant logs once when connectivity drops and once when it recovers.
+3. **Enable Debug Logging:** Add the following to `configuration.yaml` and restart Home Assistant:
+   ```yaml
+   logger:
+     default: info
+     logs:
+       custom_components.staggassistant: debug
+   ```
+4. **Download Diagnostics:** Go to **Settings > Devices & Services > StaggAssistant > `⋮` > Download diagnostics**. Sensitive fields (`ip_address`, `wifi_mac`, `ble_address`, `device_id`, `name`, `title`, `unique_id`, `ssid`) are automatically redacted before export.
+
+---
+
+## 🗑️ Removal Instructions
+
+1. Go to **Settings > Devices & Services**.
+2. Open **StaggAssistant**, click the three-dot menu (**⋮**) on the integration entry, and select **Delete**. (Persisted `.storage` cache files and repair issues are removed automatically.)
+3. If installed via **HACS**, go to **HACS > Integrations**, click **⋮** on **StaggAssistant**, and choose **Remove**.
+4. Restart Home Assistant.
 
 ---
 
@@ -149,8 +231,6 @@ The Bluetooth option requires the Home Assistant **Bluetooth** integration and a
 This repository is maintained by [@fabiankirchen](https://github.com/fabiankirchen) in collaboration with **`fabiagent`** (autonomous coding agent).
 * **Stable Upstream (Recommended):** [`fabiankirchen/staggassistant`](https://github.com/fabiankirchen/staggassistant) — **100% human-verified:** Every release and code change in this main repository is thoroughly tested on real physical kettle hardware by Fabian Kirchen before being merged and published.
 * **Development Fork (Bleeding-Edge):** [`fabiagent/staggassistant`](https://github.com/fabiagent/staggassistant) — Rapid autonomous iterations, automated test builds, and pre-releases for early testers before human hardware verification.
-
-All code changes are continuously backed by automated unit test suites covering Python 3.11, 3.12, 3.13, Hassfest, and HACS validation.
 
 ---
 
@@ -165,5 +245,5 @@ All code changes are continuously backed by automated unit test suites covering 
 
 ## 📄 License
 
-MIT License. See [LICENSE](LICENSE) file for more details.  
+MIT License. See [LICENSE](LICENSE) file for more details.
 This project is an independent community project and is not affiliated with Fellow Industries, Inc.

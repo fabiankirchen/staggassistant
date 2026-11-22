@@ -1,4 +1,10 @@
-from datetime import timedelta
+"""Constants and identifier helpers for the StaggAssistant integration."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
 
 DOMAIN = "staggassistant"
 CONF_IP_ADDRESS = "ip_address"
@@ -8,6 +14,7 @@ CONF_ENABLE_EXTENDED_ENTITIES = "enable_extended_entities"
 CONF_DEVICE_ID = "device_id"
 CONF_WIFI_MAC = "wifi_mac"
 CONF_BLE_ADDRESS = "ble_address"
+CONF_FIRMWARE_VERSION = "firmware_version"
 
 # BLE GATT characteristics exposed by the Stagg EKG Pro operational service.
 BLE_STATUS_UUID = "2291c4b4-5d7f-4477-a88b-b266edb97142"
@@ -16,15 +23,34 @@ BLE_NAME_UUID = "2291c4b8-5d7f-4477-a88b-b266edb97142"
 BLE_FIRMWARE_UUID = "2291c4b7-5d7f-4477-a88b-b266edb97142"
 
 # Default fallback interval in seconds if not configured during setup
-DEFAULT_SCAN_INTERVAL = 15 
+DEFAULT_SCAN_INTERVAL = 15
+MIN_SCAN_INTERVAL = 5
+MAX_SCAN_INTERVAL = 120
 DEFAULT_ENABLE_EXTENDED_ENTITIES = False
+
+ESP32_COMMAND_COOLDOWN = 0.15
+LEGACY_TEMP_REPROBE_INTERVAL = 6 * 3600
+STORE_SAVE_DELAY = 5.0
+REPAIR_FAILURE_THRESHOLD = 5
+ISSUE_KETTLE_UNREACHABLE_PREFIX = "kettle_unreachable_"
 
 CORE_PLATFORMS = ["climate", "sensor", "binary_sensor", "button"]
 EXTENDED_PLATFORMS = ["switch", "number", "select"]
 PLATFORMS = CORE_PLATFORMS + EXTENDED_PLATFORMS
 
 
-def get_stable_id(entry) -> str:
+def clamp_scan_interval(value: Any) -> int:
+    """Coerce a scan interval to int and clamp within [MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL]."""
+    if isinstance(value, bool):
+        return DEFAULT_SCAN_INTERVAL
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_SCAN_INTERVAL
+    return max(MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, parsed))
+
+
+def get_stable_id(entry: ConfigEntry[Any] | Any) -> str:
     """Return the stable identifier used for entity/device registry IDs.
 
     Older installations used the IP address as the entity identity.  The value
@@ -38,6 +64,6 @@ def get_stable_id(entry) -> str:
     return str(data.get(CONF_IP_ADDRESS, "")).replace(".", "_")
 
 
-def get_device_identifier(entry) -> str:
+def get_device_identifier(entry: ConfigEntry[Any] | Any) -> str:
     """Return the device registry identifier for a config entry."""
     return f"stagglink_{get_stable_id(entry)}"

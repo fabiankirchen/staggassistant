@@ -1,0 +1,54 @@
+[project]
+name = "staggassistant"
+version = "0.4.0-beta.2"
+description = "Home Assistant custom integration for the Fellow Stagg EKG Pro kettle"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "T20"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/__init__.py" = ["E402"]
+"tests/*.py" = ["E402", "I001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+warn_return_any = false
+warn_unused_ignores = false
+warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "homeassistant.*",
+    "voluptuous",
+    "voluptuous.*",
+    "bleak",
+    "bleak.*",
+    "bleak_retry_connector",
+    "bleak_retry_connector.*",
+    "aiohttp",
+    "aiohttp.*",
+    "yarl",
+    "yarl.*"
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

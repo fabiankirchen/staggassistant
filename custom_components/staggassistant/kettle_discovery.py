@@ -19,10 +19,19 @@ import re
 import socket
 import subprocess
 from dataclasses import dataclass
+from typing import Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api import (
+    build_cli_url,
+    build_temp_url,
+    is_valid_host,
+    read_response_text,
+    sanitize_temp_json,
+)
 from .const import (
     BLE_FIRMWARE_UUID,
     BLE_IDENTITY_UUID,
@@ -31,15 +40,12 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_read_response_text = read_response_text
 
 KETTLE_NAME_RE = re.compile(
     r"^EKG-([0-9a-f]{2})-([0-9a-f]{2})-([0-9a-f]{2})$", re.IGNORECASE
 )
 MAC_RE = re.compile(r"^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$", re.IGNORECASE)
-HOSTNAME_RE = re.compile(
-    r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*"
-    r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$"
-)
 
 # Advertised operational/provisioning service UUIDs.  Matching the name is
 # enough for real kettles, but service UUIDs help with devices that omit the
@@ -89,22 +95,6 @@ class KettleBleDevice:
         return f"{self.name}{suffix}"
 
 
-def is_valid_host(host: str) -> bool:
-    """Validate if a string is a valid IPv4 address or hostname."""
-    if not host or any(
-        c in host for c in ("/", "?", "#", "@", " ", "\t", "\n", "\r", ":")
-    ):
-        return False
-    try:
-        ip = ipaddress.ip_address(host)
-        return ip.version == 4
-    except ValueError:
-        pass
-    if len(host) > 253:
-        return False
-    return bool(HOSTNAME_RE.match(host))
-
-
 def normalize_mac(mac: str | None) -> str | None:
     """Return a lower-case, colon-separated MAC address."""
     if not mac:
@@ -125,7 +115,7 @@ def name_suffix(name: str | None) -> str | None:
     return ":".join(match.groups()).lower()
 
 
-def is_kettle_ble_info(info) -> bool:
+def is_kettle_ble_info(info: Any) -> bool:
     """Return True when a Bluetooth service info looks like a Stagg EKG Pro."""
     name = getattr(info, "name", None) or ""
     if KETTLE_NAME_RE.match(name.strip()):
@@ -196,7 +186,7 @@ async def async_get_kettle_ble_device_map(
     return {device.address: device.label for device in devices}
 
 
-def parse_status_record(data: bytes) -> dict:
+def parse_status_record(data: bytes) -> dict[str, Any]:
     """Parse the 39-byte operational status record (characteristic ``c4b4``).
 
     Layout observed on firmware 1.1.7x/1.2.26:
@@ -205,7 +195,7 @@ def parse_status_record(data: bytes) -> dict:
       bytes 6-37  SSID / status payload (NUL padded)
       byte 38     status flag
     """
-    result: dict = {}
+    result: dict[str, Any] = {}
     if len(data) >= 4:
         try:
             ip = str(ipaddress.IPv4Address(bytes(data[:4])))
@@ -236,9 +226,9 @@ async def async_read_ble_identity(
 ) -> KettleNetworkInfo | None:
     """Connect to the kettle over BLE and read its network identity."""
     try:
-        from homeassistant.components import bluetooth
         from bleak import BleakClient
         from bleak_retry_connector import establish_connection
+        from homeassistant.components import bluetooth
     except ImportError:  # pragma: no cover - part of Home Assistant core
         return None
 
@@ -490,20 +480,6 @@ async def async_resolve_ip_via_arp(
     return _match_arp_table(arp_table, candidates)
 
 
-async def _read_response_text(response, limit: int = 65536) -> str:
-    """Read response text up to a byte limit safely."""
-    if hasattr(response, "read"):
-        raw = await response.read()
-        if isinstance(raw, bytes):
-            return raw[:limit].decode("utf-8", errors="ignore")
-        if isinstance(raw, str):
-            return raw[:limit]
-    if hasattr(response, "text"):
-        txt = await response.text()
-        return txt[:limit]
-    return ""
-
-
 async def async_validate_kettle(hass: HomeAssistant, host: str) -> str | None:
     """Validate a host and confirm it answers like a Stagg EKG Pro.
 
@@ -511,49 +487,48 @@ async def async_validate_kettle(hass: HomeAssistant, host: str) -> str | None:
     """
     host = (host or "").strip()
     if not is_valid_host(host):
-        return "invalid_ip"
+        return "invalid_host"
 
     session = async_get_clientsession(hass)
 
     try:
-        temp_url = f"http://{host}/temp"
+        temp_url = build_temp_url(host)
         try:
             async with asyncio.timeout(5):
-                async with session.get(temp_url) as response:
+                async with session.get(temp_url, allow_redirects=False) as response:
                     if response.status == 200:
-                        raw_text = await _read_response_text(response, 65536)
-                        sanitized = re.sub(
-                            r":\s*[-+]?nan\b",
-                            ": null",
-                            raw_text,
-                            flags=re.IGNORECASE,
-                        )
+                        raw_text = await read_response_text(response, 65536)
+                        sanitized = sanitize_temp_json(raw_text)
                         data = json.loads(sanitized)
-                        if isinstance(data, dict) and "temp" in data and (
-                            "state" in data or "temp_set" in data
+                        if (
+                            isinstance(data, dict)
+                            and "temp" in data
+                            and ("state" in data or "temp_set" in data)
                         ):
                             return None
-        except (asyncio.TimeoutError, ValueError, TypeError):
+        except (TimeoutError, aiohttp.ClientError):
+            return "cannot_connect"
+        except (ValueError, TypeError):
             pass
         except Exception:
             pass
 
-        cli_url = f"http://{host}/cli?cmd=state"
+        cli_url = build_cli_url(host, "state")
         try:
             async with asyncio.timeout(5):
-                async with session.get(cli_url) as response:
+                async with session.get(cli_url, allow_redirects=False) as response:
                     if response.status == 200:
-                        text = await _read_response_text(response, 65536)
+                        text = await read_response_text(response, 65536)
                         if "mode=" in text or "tempr=" in text:
                             return None
-                        return "invalid_auth"
+                        if '<form action="cli"' in text:
+                            return "cannot_connect"
+                        return "invalid_device"
                     return "cannot_connect"
-        except (asyncio.TimeoutError, Exception):
+        except Exception:
             return "cannot_connect"
     except Exception:
         return "cannot_connect"
-
-    return "cannot_connect"
 
 
 async def async_resolve_kettle(

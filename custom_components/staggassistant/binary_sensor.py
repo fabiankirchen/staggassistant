@@ -1,5 +1,6 @@
 """Support for Fellow Stagg EKG Pro binary sensors."""
-import logging
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from homeassistant.components.binary_sensor import (
@@ -7,21 +8,14 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    CONF_ENABLE_EXTENDED_ENTITIES,
-    DEFAULT_ENABLE_EXTENDED_ENTITIES,
-    DOMAIN,
-    get_device_identifier,
-    get_stable_id,
-)
-from .coordinator import StaggLinkCoordinator
+from .const import get_stable_id
+from .coordinator import StaggConfigEntry, StaggLinkCoordinator
+from .entity import StaggEntity
 
-_LOGGER = logging.getLogger(__name__)
-
-EXTENDED_BINARY_SENSOR_KEYS = {"in_pre_boil"}
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -29,90 +23,70 @@ class StaggBinarySensorDescription(BinarySensorEntityDescription):
     """Describes a Stagg binary sensor entity."""
 
     key: str
-    name: str
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[StaggBinarySensorDescription, ...] = (
     StaggBinarySensorDescription(
         key="is_docked",
         translation_key="is_docked",
-        name="Docked",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
-        icon="mdi:kettle",
     ),
     StaggBinarySensorDescription(
         key="no_water",
         translation_key="no_water",
-        name="Low Water Warning",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        icon="mdi:water-alert",
     ),
     StaggBinarySensorDescription(
         key="target_reached",
         translation_key="target_reached",
-        name="Target Temperature Reached",
-        icon="mdi:thermometer-check",
     ),
     StaggBinarySensorDescription(
         key="in_pre_boil",
         translation_key="in_pre_boil",
-        name="Pre-Boil Active",
-        icon="mdi:water-boiler",
         entity_registry_enabled_default=False,
     ),
     StaggBinarySensorDescription(
         key="is_heating",
         translation_key="is_heating",
-        name="Heating Active",
-        icon="mdi:fire",
+        device_class=BinarySensorDeviceClass.HEAT,
     ),
     StaggBinarySensorDescription(
         key="is_holding",
         translation_key="is_holding",
-        name="Hold Active",
-        icon="mdi:timer-sand",
     ),
 )
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: StaggConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up StaggLink binary sensors from a config entry."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    enable_extended = entry.options.get(
-        CONF_ENABLE_EXTENDED_ENTITIES,
-        entry.data.get(CONF_ENABLE_EXTENDED_ENTITIES, DEFAULT_ENABLE_EXTENDED_ENTITIES),
+    coordinator = entry.runtime_data
+    async_add_entities(
+        [
+            StaggBinarySensor(coordinator, entry, desc)
+            for desc in BINARY_SENSOR_DESCRIPTIONS
+        ]
     )
-    entities = [
-        StaggBinarySensor(coordinator, entry, desc)
-        for desc in BINARY_SENSOR_DESCRIPTIONS
-        if enable_extended or desc.key not in EXTENDED_BINARY_SENSOR_KEYS
-    ]
-    async_add_entities(entities, True)
 
 
-class StaggBinarySensor(CoordinatorEntity[StaggLinkCoordinator], BinarySensorEntity):
+class StaggBinarySensor(StaggEntity, BinarySensorEntity):
     """Representation of a Stagg EKG Pro binary sensor."""
 
     entity_description: StaggBinarySensorDescription
 
-    def __init__(self, coordinator: StaggLinkCoordinator, entry, description: StaggBinarySensorDescription):
+    def __init__(
+        self,
+        coordinator: StaggLinkCoordinator,
+        entry: StaggConfigEntry,
+        description: StaggBinarySensorDescription,
+    ) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
-        self._ip = coordinator.ip
-        device_id = get_device_identifier(entry)
-
-        self._attr_has_entity_name = True
-        self._attr_translation_key = description.key
         self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{description.key}"
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.data.get("name", "Stagg Kettle"),
-            manufacturer="Fellow",
-            model="Stagg EKG Pro",
-            configuration_url=f"http://{self._ip}",
-        )
 
     @property
     def is_on(self) -> bool | None:
@@ -132,7 +106,11 @@ class StaggBinarySensor(CoordinatorEntity[StaggLinkCoordinator], BinarySensorEnt
             return bool(self.coordinator.data.get("in_pre_boil"))
         if key == "is_heating":
             mode = str(self.coordinator.data.get("mode", ""))
-            return "Heat" in mode or mode == "S_StartupToTempr" or "High" in mode
+            return (
+                "Heat" in mode
+                or mode in ("S_StartupToTempr", "S_PreBoil")
+                or "High" in mode
+            )
         if key == "is_holding":
             mode = str(self.coordinator.data.get("mode", ""))
             return mode.startswith("S_Hold")

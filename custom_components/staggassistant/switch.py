@@ -1,63 +1,94 @@
 """Support for Fellow Stagg EKG Pro switches."""
-import logging
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from __future__ import annotations
 
-from .const import DOMAIN, get_device_identifier, get_stable_id
-from .coordinator import StaggLinkCoordinator
+from dataclasses import dataclass
+from typing import Any, cast
 
-_LOGGER = logging.getLogger(__name__)
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import get_stable_id
+from .coordinator import StaggConfigEntry, StaggLinkCoordinator
+from .entity import StaggEntity
+
+PARALLEL_UPDATES = 1
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+@dataclass(frozen=True, kw_only=True)
+class StaggSwitchEntityDescription(SwitchEntityDescription):
+    """Describes a Stagg switch entity."""
+
+    turn_on_command: str
+    turn_off_command: str
+
+
+SWITCH_DESCRIPTIONS: tuple[StaggSwitchEntityDescription, ...] = (
+    StaggSwitchEntityDescription(
+        key="pre_boil_enabled",
+        translation_key="pre_boil",
+        entity_category=EntityCategory.CONFIG,
+        entity_registry_enabled_default=False,
+        turn_on_command="setsetting boil 1",
+        turn_off_command="setsetting boil 0",
+    ),
+)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: StaggConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up StaggLink switches from a config entry."""
-    coordinator: StaggLinkCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    switches = [
-        StaggSwitch(coordinator, entry, "pre_boil_enabled", "Pre-Boil", "mdi:water-boiler"),
+    coordinator = entry.runtime_data
+    entities = [
+        StaggSwitch(coordinator, entry, description)
+        for description in SWITCH_DESCRIPTIONS
     ]
+    async_add_entities(entities)
 
-    async_add_entities(switches, True)
 
-
-class StaggSwitch(CoordinatorEntity[StaggLinkCoordinator], SwitchEntity):
+class StaggSwitch(StaggEntity, SwitchEntity):
     """Representation of a Stagg EKG Pro switch."""
 
-    def __init__(self, coordinator: StaggLinkCoordinator, entry, setting_name: str, name_suffix: str, icon: str):
+    entity_description: StaggSwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: StaggLinkCoordinator,
+        entry: StaggConfigEntry,
+        description: StaggSwitchEntityDescription,
+    ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator)
-        self._setting_name = setting_name
-        self._ip = coordinator.ip
-        device_id = get_device_identifier(entry)
-
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "pre_boil"
-        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{setting_name}"
-        self._attr_icon = icon
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.data.get("name", "Stagg Kettle"),
-            manufacturer="Fellow",
-            model="Stagg EKG Pro",
-            configuration_url=f"http://{self._ip}",
-        )
+        super().__init__(coordinator, entry)
+        self.entity_description = description
+        self._attr_unique_id = f"stagg_{get_stable_id(entry)}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
-        """Return true if the switch is on."""
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on, or None when unavailable."""
         if not self.coordinator.data:
-            return False
-        val = self.coordinator.data.get(self._setting_name)
-        return val == 1 or val is True
+            return None
+        data = cast("dict[str, Any]", self.coordinator.data)
+        if self.entity_description.key not in data:
+            return None
+        val = data[self.entity_description.key]
+        if val is None:
+            return None
+        return bool(val == 1 or val is True)
 
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn the pre-boil switch on."""
-        await self.coordinator.async_send_command("setsetting boil 1")
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on."""
+        await self.coordinator.async_send_command(
+            self.entity_description.turn_on_command
+        )
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs) -> None:
-        """Turn the pre-boil switch off."""
-        await self.coordinator.async_send_command("setsetting boil 0")
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off."""
+        await self.coordinator.async_send_command(
+            self.entity_description.turn_off_command
+        )
         await self.coordinator.async_request_refresh()
